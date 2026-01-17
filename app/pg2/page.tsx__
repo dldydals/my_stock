@@ -1,0 +1,481 @@
+"use client";
+import React, { useState, useMemo, useEffect } from "react";
+import {
+  TrendingUp,
+  TrendingDown,
+  DollarSign,
+  PieChart as PieChartIcon,
+  Activity,
+  Wallet,
+  Calendar,
+  ArrowUpRight,
+  ArrowDownRight,
+  Layers,
+  ChevronRight,
+  MoreHorizontal,
+} from "lucide-react";
+import {
+  PieChart,
+  Pie,
+  Cell,
+  Tooltip,
+  ResponsiveContainer,
+  Legend,
+} from "recharts";
+
+/**
+ * 데이터 설정 영역
+ * (기존 데이터 유지)
+ */
+const INITIAL_HOLDINGS = [
+  // SK스퀘어
+  { id: 1, name: "SK스퀘어", code: "402340", date: "2025-02-20", quantity: 100, buyPrice: 101100, currentPrice: 321000 },
+  { id: 2, name: "SK스퀘어", code: "402340", date: "2025-03-27", quantity: 100, buyPrice: 96600, currentPrice: 321000 },
+  { id: 3, name: "SK스퀘어", code: "402340", date: "2025-03-31", quantity: 107, buyPrice: 92000, currentPrice: 321000 },
+  { id: 4, name: "SK스퀘어", code: "402340", date: "2025-04-22", quantity: 28, buyPrice: 82200, currentPrice: 321000 },
+  { id: 5, name: "SK스퀘어", code: "402340", date: "2025-09-24", quantity: 119, buyPrice: 213000, currentPrice: 321000 },
+  // 현대차우
+  { id: 6, name: "현대차우", code: "005385", date: "2025-02-03", quantity: 54, buyPrice: 159000, currentPrice: 203500 },
+  { id: 7, name: "현대차우", code: "005385", date: "2025-02-03", quantity: 47, buyPrice: 157200, currentPrice: 203500 },
+  { id: 8, name: "현대차우", code: "005385", date: "2025-02-17", quantity: 100, buyPrice: 156000, currentPrice: 203500 },
+  { id: 9, name: "현대차우", code: "005385", date: "2025-02-25", quantity: 98, buyPrice: 159000, currentPrice: 203500 },
+  { id: 10, name: "현대차우", code: "005385", date: "2025-11-06", quantity: 50, buyPrice: 197500, currentPrice: 203500 },
+  { id: 11, name: "현대차우", code: "005385", date: "2025-11-28", quantity: 100, buyPrice: 193500, currentPrice: 203500 },
+  // KB금융
+  { id: 12, name: "KB금융", code: "105560", date: "2025-11-14", quantity: 100, buyPrice: 129500, currentPrice: 126100 },
+  // 현대모비스
+  { id: 13, name: "현대모비스", code: "012330", date: "2021-07-22", quantity: 68, buyPrice: 280000, currentPrice: 365000 },
+  { id: 14, name: "현대모비스", code: "012330", date: "2021-07-28", quantity: 32, buyPrice: 271500, currentPrice: 365000 },
+  // LG디스플레이
+  { id: 15, name: "LG디스플레이", code: "034220", date: "2021-06-11", quantity: 283, buyPrice: 23000, currentPrice: 11850 },
+  { id: 16, name: "LG디스플레이", code: "034220", date: "2021-10-29", quantity: 180, buyPrice: 18400, currentPrice: 11850 },
+  { id: 17, name: "LG디스플레이", code: "034220", date: "2021-11-15", quantity: 55, buyPrice: 20200, currentPrice: 11850 },
+  { id: 18, name: "LG디스플레이", code: "034220", date: "2022-02-03", quantity: 209, buyPrice: 19400, currentPrice: 11850 },
+  { id: 19, name: "LG디스플레이", code: "034220", date: "2022-02-07", quantity: 465, buyPrice: 19350, currentPrice: 11850 },
+  // 대아티아이
+  { id: 20, name: "대아티아이", code: "045390", date: "2025-06-30", quantity: 130, buyPrice: 5290, currentPrice: 4105 },
+  { id: 21, name: "대아티아이", code: "045390", date: "2025-08-29", quantity: 200, buyPrice: 4805, currentPrice: 4105 },
+  { id: 22, name: "대아티아이", code: "045390", date: "2025-09-01", quantity: 200, buyPrice: 4650, currentPrice: 4105 },
+  { id: 23, name: "대아티아이", code: "045390", date: "2025-09-08", quantity: 200, buyPrice: 4540, currentPrice: 4105 },
+  // 진원생명과학
+  { id: 24, name: "진원생명과학", code: "011000", date: "2022-03-10", quantity: 301, buyPrice: 16600, currentPrice: 1959 },
+];
+
+const FEES = {
+  BUY_FEE_RATE: 0.00015,
+  SELL_FEE_RATE: 0.00015,
+  TAX_RATE: 0.0018,
+};
+
+// 파스텔 톤의 세련된 차트 컬러 팔레트
+const COLORS = ["#818CF8", "#F472B6", "#34D399", "#FBBF24", "#A78BFA", "#60A5FA"];
+
+// --- 컴포넌트: 모바일용 주식 카드 (디자인 개선) ---
+const StockSummaryCard = ({ stock }: { stock: any }) => {
+  const isProfit = stock.netProfit >= 0;
+  
+  return (
+    <div className="bg-white rounded-2xl p-5 shadow-[0_2px_15px_-3px_rgba(0,0,0,0.07),0_10px_20px_-2px_rgba(0,0,0,0.04)] hover:shadow-lg transition-all duration-300 border border-gray-100 relative overflow-hidden group">
+      {/* 배경 장식 효과 */}
+      <div className={`absolute top-0 right-0 w-24 h-24 -mr-8 -mt-8 rounded-full opacity-10 blur-xl ${isProfit ? "bg-red-500" : "bg-blue-500"}`}></div>
+
+      <div className="relative z-10">
+        <div className="flex justify-between items-start mb-4">
+          <div className="flex items-center gap-3">
+            <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-lg font-bold shadow-sm ${isProfit ? 'bg-red-50 text-red-600' : 'bg-blue-50 text-blue-600'}`}>
+              {stock.name[0]}
+            </div>
+            <div>
+              <h3 className="font-bold text-gray-800 text-lg leading-tight group-hover:text-indigo-600 transition-colors">
+                {stock.name}
+              </h3>
+              <span className="text-xs text-gray-400 font-mono tracking-wider bg-gray-50 px-1.5 py-0.5 rounded">
+                {stock.code}
+              </span>
+            </div>
+          </div>
+          <div className="text-right">
+            <span className={`inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-bold ${isProfit ? "bg-red-100/50 text-red-600" : "bg-blue-100/50 text-blue-600"}`}>
+              {isProfit ? <TrendingUp className="w-3 h-3 mr-1" /> : <TrendingDown className="w-3 h-3 mr-1" />}
+              {stock.returnRate}%
+            </span>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-y-3 gap-x-4 text-sm mb-4 bg-gray-50/50 p-3 rounded-xl">
+          <div>
+            <p className="text-gray-400 text-xs mb-0.5">보유수량</p>
+            <p className="font-semibold text-gray-700">{stock.quantity.toLocaleString()}주</p>
+          </div>
+          <div className="text-right">
+            <p className="text-gray-400 text-xs mb-0.5">평균단가</p>
+            <p className="font-semibold text-gray-700">{stock.avgBuyPrice.toLocaleString()}원</p>
+          </div>
+          <div>
+            <p className="text-gray-400 text-xs mb-0.5">평가금액</p>
+            <p className="font-bold text-gray-900">{stock.currentAmount.toLocaleString()}원</p>
+          </div>
+          <div className="text-right">
+            <p className="text-gray-400 text-xs mb-0.5">현재가</p>
+            <p className={`font-semibold ${isProfit ? "text-red-500" : "text-blue-500"}`}>
+              {stock.currentPrice.toLocaleString()}원
+            </p>
+          </div>
+        </div>
+
+        <div className="flex justify-between items-center pt-2 border-t border-dashed border-gray-200">
+          <span className="text-sm font-medium text-gray-500">총 손익 (세후)</span>
+          <span className={`text-lg font-bold tracking-tight ${isProfit ? "text-red-600" : "text-blue-600"}`}>
+             {isProfit ? "+" : ""}{stock.netProfit.toLocaleString()}원
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default function AssetDashboard() {
+  const [prices, setPrices] = useState<Record<string, number>>({});
+  const [holdings] = useState(INITIAL_HOLDINGS);
+
+  // --- 기존 로직 유지 (가격 가져오기) ---
+  useEffect(() => {
+    const fetchPrices = async () => {
+      try {
+        const uniqueCodes = Array.from(new Set(INITIAL_HOLDINGS.map((h) => h.code)));
+        const pricePromises = uniqueCodes.map((code) =>
+          fetch(`/api/stock?ticker=${code}`)
+            .then((res) => res.json())
+            .then((data) => ({ code, price: data.currentPrice }))
+            .catch(() => null)
+        );
+        const results = await Promise.all(pricePromises);
+        const newPrices: Record<string, number> = {};
+        results.forEach((result) => {
+          if (result) newPrices[result.code] = result.price;
+        });
+        setPrices((prev) => ({ ...prev, ...newPrices }));
+      } catch (error) {
+        console.error("Error fetching prices", error);
+      }
+    };
+    fetchPrices();
+    const interval = setInterval(fetchPrices, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // --- 기존 로직 유지 (데이터 계산) ---
+  const analyzedHoldings = useMemo(() => {
+    return holdings.map((item) => {
+      const realTimePrice = prices[item.code] || item.currentPrice;
+      const buyAmount = item.buyPrice * item.quantity;
+      const currentAmount = realTimePrice * item.quantity;
+      const buyFee = buyAmount * FEES.BUY_FEE_RATE;
+      const sellFee = currentAmount * FEES.SELL_FEE_RATE;
+      const tax = currentAmount * FEES.TAX_RATE;
+      const totalFees = Math.floor(buyFee + sellFee + tax);
+      const grossProfit = currentAmount - buyAmount;
+      const netProfit = grossProfit - totalFees;
+      const returnRate = ((netProfit / buyAmount) * 100).toFixed(2);
+
+      return { ...item, currentPrice: realTimePrice, buyAmount, currentAmount, totalFees, grossProfit, netProfit, returnRate };
+    });
+  }, [holdings, prices]);
+
+  const stockSummaries = useMemo(() => {
+    const summaryMap = new Map();
+    analyzedHoldings.forEach((item) => {
+      if (!summaryMap.has(item.code)) {
+        summaryMap.set(item.code, {
+          name: item.name, code: item.code, quantity: 0, buyAmount: 0, currentAmount: 0, totalFees: 0, currentPrice: item.currentPrice,
+        });
+      }
+      const stock = summaryMap.get(item.code);
+      stock.quantity += item.quantity;
+      stock.buyAmount += item.buyAmount;
+      stock.currentAmount += item.currentAmount;
+      stock.totalFees += item.totalFees;
+    });
+
+    return Array.from(summaryMap.values()).map((stock: any) => {
+      const avgBuyPrice = Math.floor(stock.buyAmount / stock.quantity);
+      const grossProfit = stock.currentAmount - stock.buyAmount;
+      const netProfit = grossProfit - stock.totalFees;
+      const returnRate = ((netProfit / stock.buyAmount) * 100).toFixed(2);
+      return { ...stock, avgBuyPrice, netProfit, returnRate };
+    });
+  }, [analyzedHoldings]);
+
+  const portfolioSummary = useMemo(() => {
+    const totalBuyAmount = analyzedHoldings.reduce((sum, item) => sum + item.buyAmount, 0);
+    const totalCurrentAmount = analyzedHoldings.reduce((sum, item) => sum + item.currentAmount, 0);
+    const totalNetProfit = analyzedHoldings.reduce((sum, item) => sum + item.netProfit, 0);
+    const totalReturnRate = ((totalNetProfit / totalBuyAmount) * 100).toFixed(2);
+    return { totalBuyAmount, totalCurrentAmount, totalNetProfit, totalReturnRate };
+  }, [analyzedHoldings]);
+
+  const isTotalProfit = portfolioSummary.totalNetProfit >= 0;
+
+  return (
+    <div className="min-h-screen bg-gray-50/50 font-sans text-slate-800 pb-20 selection:bg-indigo-100 selection:text-indigo-900">
+      
+      {/* --- Header: Glassmorphism 적용 --- */}
+      <header className="fixed top-0 left-0 right-0 z-50 bg-white/80 backdrop-blur-md border-b border-gray-200/50">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <div className="bg-gradient-to-br from-indigo-500 to-violet-600 p-2 rounded-xl shadow-md shadow-indigo-200">
+              <Activity className="w-5 h-5 text-white" />
+            </div>
+            <h1 className="text-xl font-bold tracking-tight text-slate-900">
+              My Portfolio <span className="text-indigo-500">.</span>
+            </h1>
+          </div>
+          <div className="flex items-center gap-2 text-sm text-slate-500 bg-gray-100 px-3 py-1 rounded-full font-medium" suppressHydrationWarning={true}>
+            <Calendar className="w-3.5 h-3.5" />
+            {new Date().toLocaleDateString()}
+          </div>
+        </div>
+      </header>
+
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 mt-16">
+        
+        {/* --- 1. Dashboard Main Cards --- */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-10">
+          
+          {/* 총 자산 카드 */}
+          <div className="lg:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4">
+             {/* 자산 규모 */}
+            <div className="bg-white p-7 rounded-3xl shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] border border-gray-100 relative overflow-hidden group">
+              <div className="absolute top-0 right-0 p-5 opacity-5 group-hover:opacity-10 transition-opacity">
+                <Wallet className="w-24 h-24" />
+              </div>
+              <p className="text-sm font-semibold text-gray-500 mb-2 flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-indigo-500"></span>총 평가 자산
+              </p>
+              <div className="flex items-baseline gap-1 mt-1">
+                <p className="text-4xl font-extrabold text-slate-900 tracking-tight">
+                  {portfolioSummary.totalCurrentAmount.toLocaleString()}
+                </p>
+                <span className="text-xl font-medium text-slate-400">원</span>
+              </div>
+              <div className="mt-6 flex items-center gap-2 text-sm text-gray-500">
+                <span className="bg-gray-100 px-2 py-1 rounded text-xs font-mono">투자원금</span>
+                <span>{portfolioSummary.totalBuyAmount.toLocaleString()}원</span>
+              </div>
+            </div>
+
+            {/* 수익 현황 */}
+            <div className="bg-white p-7 rounded-3xl shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] border border-gray-100 relative overflow-hidden">
+              <p className="text-sm font-semibold text-gray-500 mb-2 flex items-center gap-1.5">
+                <span className={`w-2 h-2 rounded-full ${isTotalProfit ? 'bg-red-500' : 'bg-blue-500'}`}></span>
+                총 예상 손익
+              </p>
+              <div className="flex items-center gap-3 mt-1">
+                <p className={`text-4xl font-extrabold tracking-tight ${isTotalProfit ? "text-red-600" : "text-blue-600"}`}>
+                  {isTotalProfit ? "+" : ""}{portfolioSummary.totalNetProfit.toLocaleString()}
+                </p>
+                <div className={`flex items-center px-2 py-1 rounded-lg text-sm font-bold ${isTotalProfit ? "bg-red-50 text-red-600" : "bg-blue-50 text-blue-600"}`}>
+                  {isTotalProfit ? <ArrowUpRight className="w-4 h-4 mr-1" /> : <ArrowDownRight className="w-4 h-4 mr-1" />}
+                  {portfolioSummary.totalReturnRate}%
+                </div>
+              </div>
+               <p className="mt-6 text-sm text-gray-400">
+                  수수료 및 제세금 포함 (예상치)
+               </p>
+            </div>
+          </div>
+
+          {/* 포트폴리오 차트 (수정된 부분) */}
+          <div className="bg-white p-6 rounded-3xl shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] border border-gray-100 flex flex-col">
+            <h2 className="text-base font-bold text-gray-800 flex items-center gap-2 mb-2">
+              <PieChartIcon className="w-4 h-4 text-indigo-500" /> 자산 구성
+            </h2>
+            {/* 수정 1: min-h를 350px로 늘려 공간 확보 */}
+            <div className="flex-1 min-h-[350px] relative">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={stockSummaries}
+                    cx="50%"
+                    cy="50%"
+                    // 차트 크기 조절 (범례 공간 확보를 위해 약간 축소)
+                    innerRadius={55}
+                    outerRadius={75}
+                    paddingAngle={4}
+                    dataKey="currentAmount"
+                    cornerRadius={6}
+                  >
+                    {stockSummaries.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} stroke="none" />
+                    ))}
+                  </Pie>
+                  <Tooltip 
+                    formatter={(value: number) => `${value.toLocaleString()}원`}
+                    contentStyle={{ borderRadius: "12px", border: "none", boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.1)" }}
+                  />
+                  <Legend 
+                    verticalAlign="bottom" 
+                    // 수정 2: 고정 height 제거하여 자동 줄바꿈 허용
+                    // height={36}  <-- 이 부분을 제거했습니다.
+                    iconType="circle" 
+                    iconSize={8}
+                    wrapperStyle={{ paddingTop: '20px' }} // 차트와 범례 사이 간격 추가
+                    formatter={(value) => <span className="text-xs font-medium text-slate-500 ml-1 mr-3 inline-block mb-1">{value}</span>}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+              {/* 차트 중앙 텍스트 위치 미세 조정 */}
+              <div className="absolute top-[45%] left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-center pointer-events-none -mt-6">
+                <span className="text-xs text-gray-400 block mb-1">Total</span>
+                <span className="text-xl font-bold text-gray-800">100%</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* --- 2. 종목별 현황 (Desktop Table) --- */}
+        <div className="mb-12">
+          <div className="flex items-center justify-between mb-5 px-1">
+             <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+              <Layers className="w-6 h-6 text-indigo-500" /> 보유 종목 현황
+            </h2>
+          </div>
+
+          {/* 데스크탑 뷰 */}
+          <div className="hidden md:block bg-white rounded-3xl shadow-sm border border-gray-200 overflow-hidden">
+            <table className="w-full text-sm text-left">
+              <thead className="bg-gray-50/80 text-gray-500 font-medium border-b border-gray-100">
+                <tr>
+                  <th className="px-6 py-5">종목명</th>
+                  <th className="px-6 py-5 text-right">보유수량</th>
+                  <th className="px-6 py-5 text-right">평균단가</th>
+                  <th className="px-6 py-5 text-right">매수금액</th>
+                  <th className="px-6 py-5 text-right">현재가</th>
+                  <th className="px-6 py-5 text-right">평가금액</th>
+                  <th className="px-6 py-5 text-right">평가손익</th>
+                  <th className="px-6 py-5 text-right">수익률</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {stockSummaries.map((stock) => {
+                  const isProfit = stock.netProfit >= 0;
+                  return (
+                    <tr key={stock.code} className="hover:bg-indigo-50/30 transition-colors group cursor-default">
+                      <td className="px-6 py-5">
+                        <div className="flex items-center gap-3">
+                           <div className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center text-xs font-bold text-gray-600 group-hover:bg-white group-hover:shadow-sm transition-all">
+                              {stock.name[0]}
+                           </div>
+                           <div>
+                              <div className="font-bold text-gray-800 text-base">{stock.name}</div>
+                              <div className="text-xs text-gray-400 font-mono mt-0.5">{stock.code}</div>
+                           </div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-5 text-right font-medium text-gray-600">{stock.quantity.toLocaleString()}</td>
+                      <td className="px-6 py-5 text-right text-gray-500">{stock.avgBuyPrice.toLocaleString()}</td>
+                      <td className="px-6 py-5 text-right text-gray-500">{stock.buyAmount.toLocaleString()}</td>
+                      <td className={`px-6 py-5 text-right font-bold ${isProfit ? "text-red-500" : "text-blue-500"}`}>
+                        {stock.currentPrice.toLocaleString()}
+                      </td>
+                      <td className="px-6 py-5 text-right font-bold text-gray-800">{stock.currentAmount.toLocaleString()}</td>
+                      <td className={`px-6 py-5 text-right font-medium ${isProfit ? "text-red-600" : "text-blue-600"}`}>
+                         {isProfit ? "+" : ""}{stock.netProfit.toLocaleString()}
+                      </td>
+                      <td className="px-6 py-5 text-right">
+                        <span className={`inline-flex items-center px-2.5 py-1 rounded-md text-xs font-bold ${isProfit ? "bg-red-50 text-red-600" : "bg-blue-50 text-blue-600"}`}>
+                          {isProfit ? "+" : ""}{stock.returnRate}%
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          {/* 모바일 뷰 (Cards) */}
+          <div className="md:hidden grid grid-cols-1 gap-4">
+            {stockSummaries.map((stock) => (
+              <StockSummaryCard key={stock.code} stock={stock} />
+            ))}
+          </div>
+        </div>
+
+        {/* --- 3. 상세 내역 (아코디언 스타일 대신 깔끔한 리스트) --- */}
+        <div>
+          <div className="px-1 py-4 flex justify-between items-end mb-2">
+            <div>
+               <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+                <Calendar className="w-5 h-5 text-indigo-500" /> 상세 거래 내역
+              </h2>
+              <p className="text-sm text-gray-400 mt-1">개별 건별 매수 시점 기준 데이터입니다.</p>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-3xl shadow-sm border border-gray-200 overflow-hidden hidden md:block">
+            <div className="max-h-[500px] overflow-y-auto custom-scrollbar">
+              <table className="w-full text-sm text-left">
+                <thead className="bg-gray-50 text-gray-500 font-medium sticky top-0 z-10 shadow-sm">
+                  <tr>
+                    <th className="px-6 py-3 text-xs uppercase tracking-wider">종목명/날짜</th>
+                    <th className="px-6 py-3 text-xs uppercase tracking-wider text-right">수량</th>
+                    <th className="px-6 py-3 text-xs uppercase tracking-wider text-right">매수단가</th>
+                    <th className="px-6 py-3 text-xs uppercase tracking-wider text-right">현재가</th>
+                    <th className="px-6 py-3 text-xs uppercase tracking-wider text-right">손익</th>
+                    <th className="px-6 py-3 text-xs uppercase tracking-wider text-right">수익률</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {analyzedHoldings.map((item) => {
+                    const isItemProfit = item.netProfit >= 0;
+                    return (
+                      <tr key={item.id} className="hover:bg-gray-50 transition-colors">
+                        <td className="px-6 py-4">
+                           <div className="font-semibold text-gray-700">{item.name}</div>
+                           <div className="text-xs text-gray-400 mt-0.5">{item.date}</div>
+                        </td>
+                        <td className="px-6 py-4 text-right text-gray-600">{item.quantity.toLocaleString()}</td>
+                        <td className="px-6 py-4 text-right text-gray-500">{item.buyPrice.toLocaleString()}</td>
+                        <td className="px-6 py-4 text-right font-medium">{item.currentPrice.toLocaleString()}</td>
+                        <td className={`px-6 py-4 text-right font-medium ${isItemProfit ? "text-red-500" : "text-blue-500"}`}>
+                           {isItemProfit ? "+" : ""}{item.netProfit.toLocaleString()}
+                        </td>
+                        <td className={`px-6 py-4 text-right font-bold ${isItemProfit ? "text-red-600" : "text-blue-600"}`}>
+                           {isItemProfit ? "+" : ""}{item.returnRate}%
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* 모바일 상세 리스트 */}
+          <div className="md:hidden space-y-3">
+             {analyzedHoldings.map((item) => {
+               const isItemProfit = item.netProfit >= 0;
+               return (
+                  <div key={item.id} className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex justify-between items-center">
+                     <div>
+                        <div className="font-bold text-gray-700">{item.name}</div>
+                        <div className="text-xs text-gray-400 mt-0.5">{item.date} · {item.quantity}주</div>
+                     </div>
+                     <div className="text-right">
+                        <div className={`font-bold ${isItemProfit ? "text-red-600" : "text-blue-600"}`}>
+                           {isItemProfit ? "+" : ""}{item.returnRate}%
+                        </div>
+                        <div className="text-xs text-gray-500 mt-0.5">
+                           {item.buyPrice.toLocaleString()}원
+                        </div>
+                     </div>
+                  </div>
+               )
+             })}
+          </div>
+        </div>
+      </main>
+    </div>
+  );
+}
