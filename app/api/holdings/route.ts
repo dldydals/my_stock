@@ -4,8 +4,23 @@ import path from 'path';
 
 const DATA_FILE_PATH = path.join(process.cwd(), 'data', 'stock-holdings.json');
 
+async function ensureDataFile() {
+    try {
+        await fs.access(DATA_FILE_PATH);
+    } catch {
+        const dir = path.dirname(DATA_FILE_PATH);
+        try {
+            await fs.access(dir);
+        } catch {
+            await fs.mkdir(dir, { recursive: true });
+        }
+        await fs.writeFile(DATA_FILE_PATH, '[]', 'utf-8');
+    }
+}
+
 export async function GET() {
     try {
+        await ensureDataFile();
         const data = await fs.readFile(DATA_FILE_PATH, 'utf-8');
         const holdings = JSON.parse(data);
         return NextResponse.json(holdings);
@@ -17,6 +32,7 @@ export async function GET() {
 
 export async function POST(req: Request) {
     try {
+        await ensureDataFile();
         const newHolding = await req.json();
         const data = await fs.readFile(DATA_FILE_PATH, "utf8");
         const holdings: any[] = JSON.parse(data);
@@ -37,6 +53,7 @@ export async function POST(req: Request) {
 
 export async function DELETE(req: Request) {
     try {
+        await ensureDataFile();
         const { searchParams } = new URL(req.url);
         const id = searchParams.get('id');
 
