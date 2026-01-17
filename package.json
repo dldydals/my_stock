@@ -7,7 +7,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "python-api": "cd python && /home/ymlee/Dev/.venv/bin/python -u -m uvicorn stock_api:app --reload --port 8000",
+    "python-api": "run-script-os",
+    "python-api:linux": "cd python && /home/ymlee/Dev/.venv/bin/python -u -m uvicorn stock_api:app --reload --port 8000",
+    "python-api:win32": "cd python && python -m uvicorn stock_api:app --reload --port 8000",
     "mystock": "concurrently --kill-others \"npm run python-api\" \"npm run dev\""
   },
   "dependencies": {
@@ -25,6 +27,7 @@
     "concurrently": "^9.2.1",
     "eslint": "^9",
     "eslint-config-next": "16.1.1",
+    "run-script-os": "^1.1.6",
     "tailwindcss": "^4",
     "typescript": "^5"
   }
