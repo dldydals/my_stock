@@ -20,6 +20,7 @@ export interface AnalyzedHolding extends Holding {
   per?: number;
   pbr?: number;
   dividend_yield?: number;
+  strategy?: StrategyData;
 }
 
 export interface StockSummary {
@@ -74,4 +75,5 @@ export interface MarketData {
   dividend_yield: number;
   market_cap: number;
   volume: number;
+  strategy?: StrategyData;
 }

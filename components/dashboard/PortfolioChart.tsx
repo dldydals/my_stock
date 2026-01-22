@@ -8,18 +8,44 @@ interface Props {
   stockSummaries: StockSummary[];
 }
 
+// 라디안 계산을 위한 상수
+const RADIAN = Math.PI / 180;
+
 export const PortfolioChart: React.FC<Props> = ({ stockSummaries }) => {
   
-  // 1. 데이터를 금액(비율)이 큰 순서대로 정렬합니다. (내림차순)
   const sortedData = useMemo(() => {
-    // 원본 배열을 복사([...])한 후 정렬해야 안전합니다.
     return [...stockSummaries].sort((a, b) => b.currentAmount - a.currentAmount);
   }, [stockSummaries]);
 
-  // 1. 비율 계산을 위해 전체 자산 총액을 먼저 구합니다.
   const totalValue = useMemo(() => {
     return sortedData.reduce((sum, item) => sum + item.currentAmount, 0);
   }, [sortedData]);
+
+  // 🔹 커스텀 레이블 렌더링 함수 (그래프 옆에 % 표시)
+  const renderCustomizedLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent, index }: any) => {
+    // 1% 미만인 섹션은 레이블을 숨겨서 겹침 방지 (필요 시 제거 가능)
+    if (percent < 0.01) return null;
+
+    // 레이블 위치 계산 (outerRadius보다 20px 바깥쪽)
+    const radius = outerRadius + 20;
+    const x = cx + radius * Math.cos(-midAngle * RADIAN);
+    const y = cy + radius * Math.sin(-midAngle * RADIAN);
+
+    return (
+      <text
+        x={x}
+        y={y}
+        fill={COLORS[index % COLORS.length]} // 해당 섹션과 같은 색상 사용
+        // fill="#6b7280" // 회색으로 통일하고 싶다면 이 줄 사용
+        textAnchor={x > cx ? 'start' : 'end'} // 좌우 위치에 따라 정렬 변경
+        dominantBaseline="central"
+        fontSize={12}
+        fontWeight="bold"
+      >
+        {`${(percent * 100).toFixed(1)}%`}
+      </text>
+    );
+  };
 
   return (
     <div className="bg-white p-6 rounded-3xl shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] border border-gray-100 flex flex-col">
@@ -32,13 +58,16 @@ export const PortfolioChart: React.FC<Props> = ({ stockSummaries }) => {
             <Pie
               data={sortedData}
               cx="50%"
-              cy="40%"
+              cy="50%"
               innerRadius={55}
               outerRadius={75}
               paddingAngle={4}
               dataKey="currentAmount"
               nameKey="name"
               cornerRadius={6}
+              // 👇 여기에 label 속성을 추가했습니다.
+              label={renderCustomizedLabel} 
+              labelLine={true} // 지시선 표시 (false로 하면 선이 사라짐)
             >
               {sortedData.map((entry, index) => (
                 <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} stroke="none" />
@@ -52,25 +81,23 @@ export const PortfolioChart: React.FC<Props> = ({ stockSummaries }) => {
               verticalAlign="bottom"
               iconType="circle"
               iconSize={8}
-              wrapperStyle={{ paddingTop: "0px", 
-                        marginTop: "-20px"
-                  }}
+              wrapperStyle={{ paddingTop: "0px", marginTop: "10px", marginBottom: "0px"}} // 마진 약간 조정
               formatter={(value, entry: any) => {
-                // 현재 항목의 금액을 가져옵니다.
                 const currentAmount = entry.payload.currentAmount;
-                // 비율 계산 (소수점 반올림)
                 const percent = ((currentAmount / totalValue) * 100).toFixed(1);
                 
                 return (
-                 <span className="text-xs font-medium text-slate-500 ml-1 mr-2 inline-block mb-0">
-                  {value}<span className="text-slate-400">({percent}%)</span>
+                  <span className="text-xs font-medium text-slate-500 ml-1 mr-2 inline-block mb-0">
+                   {value}<span className="text-slate-400">({percent}%)</span>
                   </span>
-              );
-            }}
+                );
+              }}
             />
           </PieChart>
         </ResponsiveContainer>
-        <div className="absolute top-[29%] left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-center pointer-events-none">
+        
+        {/* 가운데 텍스트 위치 조정 (레이블과 겹치지 않게 주의) */}
+        <div className="absolute top-[35%] left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-center pointer-events-none">
           <span className="text-xs text-gray-400 block mb-1">Total</span>
           <span className="text-xl font-bold text-gray-800">100%</span>
         </div>

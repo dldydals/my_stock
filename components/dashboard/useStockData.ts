@@ -131,7 +131,8 @@ export function useStockData() {
         change_rate,
         per: marketInfo?.per,
         pbr: marketInfo?.pbr,
-        dividend_yield: marketInfo?.dividend_yield
+        dividend_yield: marketInfo?.dividend_yield,
+        strategy: marketInfo?.strategy
       };
     });
   }, [holdings, marketData]);
@@ -148,7 +149,8 @@ export function useStockData() {
           currentAmount: 0,
           totalFees: 0,
           currentPrice: item.currentPrice,
-          change_rate: item.change_rate
+          change_rate: item.change_rate,
+          strategy: item.strategy
         });
       }
       const stock = summaryMap.get(item.code);
@@ -158,6 +160,9 @@ export function useStockData() {
       stock.totalFees += item.totalFees;
       stock.currentPrice = item.currentPrice;
       stock.change_rate = item.change_rate;
+      if (item.strategy) {
+        stock.strategy = item.strategy;
+      }
     });
 
     return Array.from(summaryMap.values()).map((stock: any) => {
