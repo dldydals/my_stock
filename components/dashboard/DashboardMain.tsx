@@ -97,7 +97,7 @@ export default function DashboardMain() {
                   </button>
                 </div>
 
-                <div className="flex items-baseline gap-1.5 mb-2">
+                <div className="flex items-baseline gap-1.5 mt-15 mb-2">
                   <p className="text-5xl font-extrabold text-slate-900 tracking-tight">
                     {portfolioSummary.totalCurrentAmount.toLocaleString()}
                   </p>
@@ -132,7 +132,7 @@ export default function DashboardMain() {
                 ></span>
                 총 예상 손익
               </p>
-              <div className="flex items-center gap-3 mt-1">
+              <div className="flex items-center gap-3 mt-18">
                 <p
                   className={`text-4xl font-extrabold tracking-tight ${isTotalProfit ? "text-red-600" : "text-blue-600"
                     }`}
