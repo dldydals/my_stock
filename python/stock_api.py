@@ -67,40 +67,56 @@ def get_latest_trading_data(ticker: str, days_to_look_back: int = 7):
 # [Heavy] 상세 정보 (최초 로딩, 날짜 변경 시 호출)
 # stock_api.py 수정
 
+def get_valid_fundamental(ticker: str, retries=10):
+    """
+    오늘 날짜부터 과거로 거슬러 올라가며 
+    데이터가 존재하는 가장 최근 날짜의 펀더멘털을 찾습니다.
+    """
+    for i in range(retries):
+        target_date = (datetime.now() - timedelta(days=i)).strftime("%Y%m%d")
+        try:
+            df = stock.get_market_fundamental_by_ticker(date=target_date, market="ALL")
+            if not df.empty and ticker in df.index:
+                row = df.loc[ticker]
+                # DIV(배당수익률)이나 PBR 중 하나라도 데이터가 있으면 유효한 날짜로 간주
+                if row['PBR'] > 0 or row['DIV'] > 0:
+                    print(f"Found fundamental data for {ticker} on {target_date}")
+                    return row
+        except Exception as e:
+            continue
+    return None
+
 @app.get("/stock/{ticker}")
 def get_stock_detail(ticker: str):
     try:
-        # 1. 시세 데이터 (최근 7일 조회)
+        # 1. 시세 데이터
         end_date = datetime.now().strftime("%Y%m%d")
-        start_date = (datetime.now() - timedelta(days=7)).strftime("%Y%m%d")
+        start_date = (datetime.now() - timedelta(days=10)).strftime("%Y%m%d")
         
         df_price = stock.get_market_ohlcv(start_date, end_date, ticker)
         if df_price.empty:
             raise HTTPException(status_code=404, detail="No Price Data")
         
         last_price = df_price.iloc[-1]
+        last_date = df_price.index[-1].strftime("%Y%m%d")
         
-        # 2. [수정 2] 펀더멘털 데이터 (과거 데이터 뒤지기 적용)
-        fund_data = get_valid_fundamental(ticker)
+        # 2. 펀더멘컬 데이터 (pykrx 내부 오류 대응)
+        per, pbr, div_yield = None, None, None
+        try:
+            fund_data = get_valid_fundamental(ticker)
+            if fund_data is not None:
+                per = float(fund_data['PER'])
+                pbr = float(fund_data['PBR'])
+                div_yield = float(fund_data['DIV'])
+        except Exception as fe:
+            print(f"Fundamental data scrape failed for {ticker}: {fe}")
         
-        per, pbr, div_yield = 0.0, 0.0, 0.0
-        if fund_data is not None:
-            per = float(fund_data['PER'])
-            pbr = float(fund_data['PBR'])
-            div_yield = float(fund_data['DIV'])
-        
-        # 3. 시가총액 (그냥 오늘자 조회하되 없으면 0)
+        # 3. 시가총액
         market_cap = 0
         try:
-            cap_df = stock.get_market_cap(end_date, end_date, ticker)
+            cap_df = stock.get_market_cap(last_date, last_date, ticker)
             if not cap_df.empty and ticker in cap_df.index:
                 market_cap = int(cap_df.loc[ticker, "시가총액"])
-            else:
-                # 오늘 없으면 어제 걸로 한 번 더 시도
-                prev_date = (datetime.now() - timedelta(days=1)).strftime("%Y%m%d")
-                cap_df = stock.get_market_cap(prev_date, prev_date, ticker)
-                if not cap_df.empty and ticker in cap_df.index:
-                    market_cap = int(cap_df.loc[ticker, "시가총액"])
         except:
             pass
 
@@ -113,6 +129,7 @@ def get_stock_detail(ticker: str):
             "pbr": pbr,
             "dividend_yield": div_yield,
             "market_cap": market_cap,
+            "data_source_status": "FUNDAMENTAL_UNAVAILABLE" if div_yield is None else "OK"
         }
 
     except HTTPException as http_e:

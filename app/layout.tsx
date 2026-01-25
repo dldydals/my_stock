@@ -1,20 +1,10 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
+import DashboardLayout from "../components/layout/DashboardLayout";
 
 export const metadata: Metadata = {
-  title: "My Stock | 스마트한 자산 관리",
-  description: "개인 주식 포트폴리오 및 투자 전략 모니터링 시스템",
+  title: "My Stock Portfolio",
+  description: "High-density asset management dashboard",
 };
 
 export default function RootLayout({
@@ -23,11 +13,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="ko" suppressHydrationWarning>
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-      >
-        {children}
+    <html lang="ko" suppressHydrationWarning className="dark">
+      <body className="antialiased font-sans">
+        <DashboardLayout>
+          {children}
+        </DashboardLayout>
       </body>
     </html>
   );

@@ -1,870 +1,253 @@
-"use client";
-import React, { useState, useMemo, useEffect, useRef } from "react";
-import {
-  TrendingUp,
-  TrendingDown,
-  DollarSign,
-  PieChart as PieChartIcon,
-  Activity,
-  Wallet,
-  Calendar,
-  ArrowUpRight,
-  ArrowDownRight,
-  Layers,
-  BarChart2,
-  Maximize2,
-  RefreshCw,
-} from "lucide-react";
-import {
-  AreaChart,
-  Area,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  PieChart,
-  Pie,
-  Cell,
-  Legend,
-} from "recharts";
-/**
- * 데이터 설정 영역
- * 업로드된 파일의 내용을 바탕으로 구성했습니다.
- * 추가 매수 건이 있다면 이 배열에 추가하면 됩니다.
- */
-const INITIAL_HOLDINGS = [
-  // SK스퀘어 (현재가: 321,000원)
-  {
-    id: 1,
-    name: "SK스퀘어",
-    code: "402340",
-    date: "2025-02-20",
-    quantity: 100,
-    buyPrice: 101100,
-    currentPrice: 321000,
-  },
-  {
-    id: 2,
-    name: "SK스퀘어",
-    code: "402340",
-    date: "2025-03-27",
-    quantity: 100,
-    buyPrice: 96600,
-    currentPrice: 321000,
-  },
-  {
-    id: 3,
-    name: "SK스퀘어",
-    code: "402340",
-    date: "2025-03-31",
-    quantity: 107,
-    buyPrice: 92000,
-    currentPrice: 321000,
-  },
-  {
-    id: 4,
-    name: "SK스퀘어",
-    code: "402340",
-    date: "2025-04-22",
-    quantity: 28,
-    buyPrice: 82200,
-    currentPrice: 321000,
-  },
-  {
-    id: 5,
-    name: "SK스퀘어",
-    code: "402340",
-    date: "2025-09-24",
-    quantity: 119,
-    buyPrice: 213000,
-    currentPrice: 321000,
-  },
+'use client';
 
-  // 현대차우 (현재가: 203,500원)
-  {
-    id: 6,
-    name: "현대차우",
-    code: "005385",
-    date: "2025-02-03",
-    quantity: 54,
-    buyPrice: 159000,
-    currentPrice: 203500,
-  },
-  {
-    id: 7,
-    name: "현대차우",
-    code: "005385",
-    date: "2025-02-03",
-    quantity: 47,
-    buyPrice: 157200,
-    currentPrice: 203500,
-  },
-  {
-    id: 8,
-    name: "현대차우",
-    code: "005385",
-    date: "2025-02-17",
-    quantity: 100,
-    buyPrice: 156000,
-    currentPrice: 203500,
-  },
-  {
-    id: 9,
-    name: "현대차우",
-    code: "005385",
-    date: "2025-02-25",
-    quantity: 98,
-    buyPrice: 159000,
-    currentPrice: 203500,
-  },
-  {
-    id: 10,
-    name: "현대차우",
-    code: "005385",
-    date: "2025-11-06",
-    quantity: 50,
-    buyPrice: 197500,
-    currentPrice: 203500,
-  },
-  {
-    id: 11,
-    name: "현대차우",
-    code: "005385",
-    date: "2025-11-28",
-    quantity: 100,
-    buyPrice: 193500,
-    currentPrice: 203500,
-  },
+import React, { useState, useMemo, useEffect } from 'react';
+import { Row, Col, Divider, Typography, Breadcrumb, Space, Button, Card } from 'antd';
+import { ReloadOutlined, DatabaseOutlined } from '@ant-design/icons';
+import SummaryStats from '../components/dashboard/SummaryStats';
+import AssetPieChart from '../components/dashboard/AssetPieChart';
+import StockTable from '../components/dashboard/StockTable';
+import TransactionDrawer from '../components/dashboard/TransactionDrawer';
+import PortfolioInsights from '../components/dashboard/PortfolioInsights';
 
-  // KB금융 (현재가: 126,100원) - 매수 이력 예시 (문서 내역 없음)
-  {
-    id: 12,
-    name: "KB금융",
-    code: "105560",
-    date: "2025-11-14",
-    quantity: 100,
-    buyPrice: 129500,
-    currentPrice: 126100,
-  },
+const { Title, Text } = Typography;
 
-  // 현대모비스 (현재가: 365,000원) - 매수 이력 예시 (문서 내역 없음)
-  {
-    id: 13,
-    name: "현대모비스",
-    code: "012330",
-    date: "2021-07-22",
-    quantity: 68,
-    buyPrice: 280000,
-    currentPrice: 365000,
-  },
-  {
-    id: 14,
-    name: "현대모비스",
-    code: "012330",
-    date: "2021-07-28",
-    quantity: 32,
-    buyPrice: 271500,
-    currentPrice: 365000,
-  },
+export default function Home() {
+  const [loading, setLoading] = useState(true);
+  const [holdings, setHoldings] = useState<any[]>([]);
+  const [balances, setBalances] = useState<any[]>([]);
+  const [dividendStats, setDividendStats] = useState<Record<string, number>>({});
+  const [transactions, setTransactions] = useState<any[]>([]);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [selectedStock, setSelectedStock] = useState<any>(null);
+  const [cashModalOpen, setCashModalOpen] = useState(false);
 
-  // LG디스플레이
-  {
-    id: 15,
-    name: "LG디스플레이",
-    code: "034220",
-    date: "2021-06-11",
-    quantity: 283,
-    buyPrice: 23000,
-    currentPrice: 11850,
-  },
-  {
-    id: 16,
-    name: "LG디스플레이",
-    code: "034220",
-    date: "2021-10-29",
-    quantity: 180,
-    buyPrice: 18400,
-    currentPrice: 11850,
-  },
-  {
-    id: 17,
-    name: "LG디스플레이",
-    code: "034220",
-    date: "2021-11-15",
-    quantity: 55,
-    buyPrice: 20200,
-    currentPrice: 11850,
-  },
-  {
-    id: 18,
-    name: "LG디스플레이",
-    code: "034220",
-    date: "2022-02-03",
-    quantity: 209,
-    buyPrice: 19400,
-    currentPrice: 11850,
-  },
-  {
-    id: 19,
-    name: "LG디스플레이",
-    code: "034220",
-    date: "2022-02-07",
-    quantity: 465,
-    buyPrice: 19350,
-    currentPrice: 11850,
-  },
+  const fetchData = async () => {
+    setLoading(true);
+    try {
+      const [holdRes, cashRes] = await Promise.all([
+        fetch('/api/holdings'),
+        fetch('/api/cash')
+      ]);
 
-  // 대아티아이
-  {
-    id: 20,
-    name: "대아티아이",
-    code: "045390",
-    date: "2025-06-30",
-    quantity: 130,
-    buyPrice: 5290,
-    currentPrice: 4105,
-  },
-  {
-    id: 21,
-    name: "대아티아이",
-    code: "045390",
-    date: "2025-08-29",
-    quantity: 200,
-    buyPrice: 4805,
-    currentPrice: 4105,
-  },
-  {
-    id: 22,
-    name: "대아티아이",
-    code: "045390",
-    date: "2025-09-01",
-    quantity: 200,
-    buyPrice: 4650,
-    currentPrice: 4105,
-  },
-  {
-    id: 23,
-    name: "대아티아이",
-    code: "045390",
-    date: "2025-09-08",
-    quantity: 200,
-    buyPrice: 4540,
-    currentPrice: 4105,
-  },
+      const holdData = await holdRes.json();
+      const cashData = await cashRes.json();
 
-  // 진원생명과학
-  {
-    id: 24,
-    name: "진원생명과학",
-    code: "011000",
-    date: "2022-03-10",
-    quantity: 301,
-    buyPrice: 16600,
-    currentPrice: 1959,
-  },
-];
-
-// 수수료 및 세금 설정 (추정치)
-const FEES = {
-  BUY_FEE_RATE: 0.00015, // 매수 수수료 (0.015%)
-  SELL_FEE_RATE: 0.00015, // 매도 수수료 (0.015%)
-  TAX_RATE: 0.0018, // 증권거래세 (0.18% - 코스피 기준)
-};
-
-const COLORS = ["#6366f1", "#ec4899", "#10b981", "#f59e0b", "#8b5cf6"];
-
-const StockSummaryCard = ({ stock }) => {
-  const isProfit = stock.netProfit >= 0;
-
-  return (
-    <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5 hover:border-indigo-200 transition-colors">
-      <div className="flex justify-between items-center mb-4">
-        <div className="flex items-center gap-3">
-          <div className="bg-slate-100 p-2 rounded-lg">
-            <span className="font-bold text-slate-700">{stock.name[0]}</span>
-          </div>
-          <div>
-            <h3 className="font-bold text-slate-800 text-lg leading-tight">
-              {stock.name}
-            </h3>
-            <span className="text-xs text-slate-500 font-mono">
-              {stock.code}
-            </span>
-          </div>
-        </div>
-        <div
-          className={`text-right ${
-            isProfit ? "text-red-600" : "text-blue-600"
-          }`}
-        >
-          <div className="text-sm font-bold">
-            {isProfit ? "+" : ""}
-            {stock.returnRate}%
-          </div>
-          <div className="text-xs font-medium bg-slate-50 px-1.5 py-0.5 rounded inline-block mt-1">
-            {isProfit ? "수익중" : "손실중"}
-          </div>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-2 gap-4 text-sm mb-4">
-        <div>
-          <p className="text-slate-400 text-xs mb-1">보유수량</p>
-          <p className="font-semibold text-slate-700">
-            {stock.quantity.toLocaleString()}주
-          </p>
-        </div>
-        <div className="text-right">
-          <p className="text-slate-400 text-xs mb-1">평균단가</p>
-          <p className="font-semibold text-slate-700">
-            {stock.avgBuyPrice.toLocaleString()}원
-          </p>
-        </div>
-        <div>
-          <p className="text-slate-400 text-xs mb-1">평가금액</p>
-          <p className="font-bold text-slate-900">
-            {stock.currentAmount.toLocaleString()}원
-          </p>
-        </div>
-        <div className="text-right">
-          <p className="text-slate-400 text-xs mb-1">현재가</p>
-          <p
-            className={`font-semibold ${
-              isProfit ? "text-red-500" : "text-blue-500"
-            }`}
-          >
-            {stock.currentPrice.toLocaleString()}원
-          </p>
-        </div>
-      </div>
-
-      <div
-        className={`pt-3 border-t border-slate-100 flex justify-between items-center ${
-          isProfit
-            ? "bg-red-50/30 -mx-5 -mb-5 px-5 pb-5 mt-2 pt-4"
-            : "bg-blue-50/30 -mx-5 -mb-5 px-5 pb-5 mt-2 pt-4"
-        }`}
-      >
-        <span className="text-sm font-medium text-slate-600">총 평가손익</span>
-        <span
-          className={`text-lg font-bold ${
-            isProfit ? "text-red-600" : "text-blue-600"
-          }`}
-        >
-          {isProfit ? "+" : ""}
-          {stock.netProfit.toLocaleString()}원
-        </span>
-      </div>
-    </div>
-  );
-};
-
-export default function App() {
-  // 가격 정보 상태 관리 ({ 종목코드: 현재가 })
-  const [prices, setPrices] = useState<Record<string, number>>({});
-  const [holdings] = useState(INITIAL_HOLDINGS);
-
-  // 실시간 가격 데이터 가져오기
-  useEffect(() => {
-    const fetchPrices = async () => {
-      try {
-        // 보유 종목의 고유 코드 추출
-        const uniqueCodes = Array.from(
-          new Set(INITIAL_HOLDINGS.map((h) => h.code))
-        );
-
-        // 병렬 요청으로 가격 데이터 조회
-        const pricePromises = uniqueCodes.map((code) =>
-          fetch(`/api/stock?ticker=${code}`)
-            .then((res) => res.json())
-            .then((data) => ({ code, price: data.currentPrice }))
-            .catch((err) => {
-              console.error(`Failed to fetch price for ${code}`, err);
-              return null;
-            })
-        );
-
-        const results = await Promise.all(pricePromises);
-
-        // 유효한 결과만 상태 업데이트
-        const newPrices: Record<string, number> = {};
-        results.forEach((result) => {
-          if (result) {
-            newPrices[result.code] = result.price;
+      if (!holdData.error) {
+        setHoldings(holdData);
+        // Fetch supplemental dividend data from Python API for each unique ticker
+        const divYields: Record<string, number> = {};
+        await Promise.all(holdData.map(async (h: any) => {
+          try {
+            const res = await fetch(`http://localhost:8000/stock/${h.ticker}`);
+            const detail = await res.json();
+            if (detail.dividend_yield) {
+              divYields[h.ticker] = detail.dividend_yield;
+            }
+          } catch (e) {
+            console.warn(`Failed to fetch dividend for ${h.ticker}`, e);
           }
-        });
-
-        setPrices((prev) => ({ ...prev, ...newPrices }));
-      } catch (error) {
-        console.error("Error fetching stock prices:", error);
+        }));
+        setDividendStats(divYields);
       }
-    };
 
-    // 초기 실행 및 주기적 갱신 (30초)
-    fetchPrices();
-    const interval = setInterval(fetchPrices, 30000);
+      if (!cashData.error) {
+        setBalances([
+          { type: 'DEPOSIT', balance: cashData.deposit },
+          { type: 'CMA', balance: cashData.cma }
+        ]);
+      }
+    } catch (e) {
+      console.error("Data fetch failed", e);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-    return () => clearInterval(interval);
+  useEffect(() => {
+    fetchData();
   }, []);
 
-  // 데이터 계산 로직 (개별 건)
-  const analyzedHoldings = useMemo(() => {
-    return holdings.map((item) => {
-      // 실시간 가격이 있으면 사용, 없으면 초기 설정값 사용
-      const realTimePrice = prices[item.code] || item.currentPrice;
+  const totalAssetsValue = useMemo(() => holdings.reduce((sum, item) => sum + (item.currentPrice * item.quantity), 0), [holdings]);
+  const totalBuyAmount = useMemo(() => holdings.reduce((sum, item) => sum + (item.avgPrice * item.quantity), 0), [holdings]);
+  const totalPnL = totalAssetsValue - totalBuyAmount;
 
-      const buyAmount = item.buyPrice * item.quantity;
-      const currentAmount = realTimePrice * item.quantity;
+  // Real Dividend Calculation: (currentPrice * qty) * (dividendYield / 100)
+  const expectedDividends = useMemo(() => {
+    return holdings.reduce((sum, item) => {
+      const yieldRate = dividendStats[item.ticker] || 0;
+      const amount = (item.currentPrice * item.quantity) * (yieldRate / 100);
+      return sum + amount;
+    }, 0);
+  }, [holdings, dividendStats]);
 
-      const buyFee = buyAmount * FEES.BUY_FEE_RATE;
-      const sellFee = currentAmount * FEES.SELL_FEE_RATE;
-      const tax = currentAmount * FEES.TAX_RATE;
-      const totalFees = Math.floor(buyFee + sellFee + tax);
+  const deposit = useMemo(() => balances.find(b => b.type === 'DEPOSIT')?.balance || 0, [balances]);
+  const cma = useMemo(() => balances.find(b => b.type === 'CMA')?.balance || 0, [balances]);
 
-      const grossProfit = currentAmount - buyAmount;
-      const netProfit = grossProfit - totalFees;
-      const returnRate = ((netProfit / buyAmount) * 100).toFixed(2);
+  const pieData = useMemo(() => [
+    ...holdings.map(item => ({ type: item.name, value: item.currentPrice * item.quantity })),
+    { type: '예수금', value: deposit },
+    { type: 'CMA', value: cma }
+  ], [holdings, deposit, cma]);
 
-      return {
-        ...item,
-        currentPrice: realTimePrice, // 업데이트된 가격 적용
-        buyAmount,
-        currentAmount,
-        totalFees,
-        grossProfit,
-        netProfit,
-        returnRate,
-      };
-    });
-  }, [holdings, prices]);
+  const handleRowClick = async (record: any) => {
+    setSelectedStock(record);
+    setDrawerOpen(true);
+    try {
+      const res = await fetch(`/api/transactions?ticker=${record.ticker}`);
+      const data = await res.json();
+      setTransactions(data);
+    } catch (e) {
+      console.error("Transaction fetch failed", e);
+    }
+  };
 
-  // 종목별 합계 계산 로직
-  const stockSummaries = useMemo(() => {
-    const summaryMap = new Map();
+  const onTransactionSuccess = () => {
+    fetchData();
+    if (selectedStock) {
+      handleRowClick(selectedStock);
+    }
+  };
 
-    analyzedHoldings.forEach((item) => {
-      if (!summaryMap.has(item.code)) {
-        summaryMap.set(item.code, {
-          name: item.name,
-          code: item.code,
-          quantity: 0,
-          buyAmount: 0,
-          currentAmount: 0,
-          totalFees: 0,
-          currentPrice: item.currentPrice, // 현재가는 동일하다고 가정
-        });
+  const refreshData = () => {
+    fetchData();
+  };
+
+  const handleCashUpdate = async (data: { deposit: number; cma: number }) => {
+    try {
+      const res = await fetch('/api/cash', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      if (res.ok) {
+        console.log("Cash update successful, fetching new data...");
+        await fetchData();
+      } else {
+        const errorData = await res.json().catch(() => ({ error: "Unknown error" }));
+        console.error("API returned error for cash update:", errorData.error);
+        alert(`저장 실패: ${errorData.error}`);
       }
+    } catch (e) {
+      console.error("Cash update failed", e);
+    }
+  };
 
-      const stock = summaryMap.get(item.code);
-      stock.quantity += item.quantity;
-      stock.buyAmount += item.buyAmount;
-      stock.currentAmount += item.currentAmount;
-      stock.totalFees += item.totalFees;
-    });
-
-    return Array.from(summaryMap.values()).map((stock: any) => {
-      const avgBuyPrice = Math.floor(stock.buyAmount / stock.quantity);
-      const grossProfit = stock.currentAmount - stock.buyAmount;
-      const netProfit = grossProfit - stock.totalFees;
-      const returnRate = ((netProfit / stock.buyAmount) * 100).toFixed(2);
-
-      return {
-        ...stock,
-        avgBuyPrice,
-        netProfit,
-        returnRate,
-      };
-    });
-  }, [analyzedHoldings]);
-
-  // 전체 포트폴리오 요약
-  const portfolioSummary = useMemo(() => {
-    const totalBuyAmount = analyzedHoldings.reduce(
-      (sum, item) => sum + item.buyAmount,
-      0
-    );
-    const totalCurrentAmount = analyzedHoldings.reduce(
-      (sum, item) => sum + item.currentAmount,
-      0
-    );
-    const totalNetProfit = analyzedHoldings.reduce(
-      (sum, item) => sum + item.netProfit,
-      0
-    );
-    const totalReturnRate = ((totalNetProfit / totalBuyAmount) * 100).toFixed(
-      2
-    );
-
-    return {
-      totalBuyAmount,
-      totalCurrentAmount,
-      totalNetProfit,
-      totalReturnRate,
-    };
-  }, [analyzedHoldings]);
-
-  const isTotalProfit = portfolioSummary.totalNetProfit >= 0;
+  // Hydration fix for client-side only time rendering
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   return (
-    <div className="min-h-screen bg-slate-50 font-sans text-slate-800 pb-12">
-      {/* Header */}
-      <header className="bg-white border-b border-slate-200 sticky top-0 z-10">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="bg-indigo-600 p-2 rounded-lg">
-              <Activity className="w-5 h-5 text-white" />
-            </div>
-            <h1 className="text-xl font-bold tracking-tight text-slate-900">
-              MY ASSETS
-            </h1>
+    <main className="min-h-screen">
+      {/* Premium Glass Header */}
+      <div className="glass-card mb-8 p-6 rounded-3xl border border-white/40 flex flex-col md:flex-row justify-between items-start md:items-center gap-6 transition-all duration-300">
+        <div className="flex flex-col gap-1">
+          <Breadcrumb
+            items={[
+              { title: 'Home' },
+              { title: 'Dashboard' },
+            ]}
+            className="mb-1 text-[10px] uppercase tracking-widest font-bold opacity-40"
+          />
+          <Title level={1} style={{ margin: 0, fontWeight: 900, letterSpacing: '-2px', color: 'var(--foreground)', fontSize: 32 }}>
+            Portfolio <Text style={{ fontSize: 24, fontWeight: 300, color: 'var(--foreground)', opacity: 0.6, marginLeft: 4 }}>Analytics</Text>
+          </Title>
+        </div>
+        <div className="flex items-center gap-6">
+          <div className="hidden sm:flex flex-col items-end">
+            <Text type="secondary" style={{ fontSize: 10, fontWeight: 600, color: '#94a3b8' }}>LAST SYNC</Text>
+            <Text className="font-numeric" strong style={{ fontSize: 14, color: 'var(--foreground)', opacity: 0.9 }}>{mounted ? new Date().toLocaleTimeString() : '--:--:--'}</Text>
           </div>
-          <div
-            className="text-sm text-slate-500"
-            suppressHydrationWarning={true}
+          <Button
+            size="large"
+            type="primary"
+            icon={<ReloadOutlined />}
+            loading={loading}
+            onClick={refreshData}
+            style={{
+              borderRadius: 14,
+              height: 48,
+              padding: '0 28px',
+              fontWeight: 700,
+              boxShadow: '0 4px 14px 0 rgba(59, 130, 246, 0.3)',
+              border: 'none',
+              background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)'
+            }}
           >
-            {new Date().toLocaleDateString()} 기준
-          </div>
+            데이터 동기화
+          </Button>
         </div>
-      </header>
+      </div>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* 1. Dashboard Summary Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
-          <div>
-          {/* 총 평가 자산 */}
-          <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex flex-col justify-between h-auto relative overflow-hidden mb-2">
-            <div className="relative z-10">
-              <p className="text-sm font-medium text-slate-500 mb-1 flex items-center gap-1">
-                <Wallet className="w-4 h-4" /> 총 평가 자산
-              </p>
-              <p className="text-3xl font-bold text-slate-900">
-                {portfolioSummary.totalCurrentAmount.toLocaleString()}{" "}
-                <span className="text-lg font-normal text-slate-400">원</span>
-              </p>
-            </div>
-            <div className="absolute right-0 bottom-0 opacity-5">
-              <DollarSign className="w-32 h-32 -mr-4 -mb-4" />
-            </div>
-          </div>
-
-          {/* 총 손익 */}
-          <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex flex-col justify-between h-auto mb-2">
-            <div>
-              <p className="text-sm font-medium text-slate-500 mb-1 flex items-center gap-1">
-                <TrendingUp className="w-4 h-4" /> 총 예상 손익 (제비용 포함)
-              </p>
-              <div className="flex items-baseline gap-2">
-                <p
-                  className={`text-3xl font-bold ${
-                    isTotalProfit ? "text-red-600" : "text-blue-600"
-                  }`}
-                >
-                  {isTotalProfit ? "+" : ""}
-                  {portfolioSummary.totalNetProfit.toLocaleString()}
-                </p>
-                <span className="text-slate-400 font-medium">원</span>
-              </div>
-            </div>
-          </div>
-
-          {/* 수익률 */}
-          <div
-            className={`p-6 rounded-2xl shadow-sm border flex flex-col justify-between h-auto ${
-              isTotalProfit
-                ? "bg-red-50 border-red-100"
-                : "bg-blue-50 border-blue-100"
-            }`}
+      <Row gutter={[24, 24]}>
+        {/* Left Section: Stats and Chart */}
+        <Col xs={24} lg={9}>
+          <SummaryStats
+            totalAssets={totalAssetsValue}
+            todayPnL={totalPnL}
+            expectedDividends={expectedDividends}
+            cashDeposit={deposit}
+            cashCma={cma}
+            onUpdateCash={handleCashUpdate}
+          />
+          <Card
+            className="shadow-sm border-slate-100 dark:border-slate-800 overflow-hidden"
+            styles={{
+              header: { background: 'rgba(52, 211, 153, 0.05)', borderBottom: '1px solid rgba(52, 211, 153, 0.1)', minHeight: 40 },
+              body: { padding: '20px 16px' }
+            }}
+            title={
+              <Space size={8}>
+                <div className="w-1.5 h-4 bg-emerald-500 rounded-full shadow-[0_0_8px_rgba(16,185,129,0.3)]" />
+                <span className="text-sm font-bold" style={{ color: 'var(--foreground)', opacity: 0.8 }}>자산 배분 현황</span>
+              </Space>
+            }
           >
-            <div>
-              <p
-                className={`text-sm font-medium mb-1 flex items-center gap-1 ${
-                  isTotalProfit ? "text-red-700" : "text-blue-700"
-                }`}
-              >
-                <PieChartIcon className="w-4 h-4" /> 총 수익률{" "}
-                {/* 아이콘 컴포넌트로 변경 */}
-              </p>
-              <div className="flex items-center gap-2">
-                {isTotalProfit ? (
-                  <ArrowUpRight className="w-8 h-8 text-red-600" />
-                ) : (
-                  <ArrowDownRight className="w-8 h-8 text-blue-600" />
-                )}
-                <p
-                  className={`text-4xl font-extrabold ${
-                    isTotalProfit ? "text-red-600" : "text-blue-600"
-                  }`}
-                >
-                  {isTotalProfit ? "+" : ""}
-                  {portfolioSummary.totalReturnRate}%
-                </p>
-              </div>
-            </div>
-          </div>
-          </div>
-          <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col">
-            <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2 mb-2">
-              <PieChartIcon className="w-5 h-5 text-indigo-500" />
-              포트폴리오 비중
-            </h2>
-            <div className="flex-1 min-h-[250px] relative">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={stockSummaries}
-                    cx="50%"
-                    cy="40%"
-                    innerRadius={60}
-                    outerRadius={80}
-                    paddingAngle={5}
-                    dataKey="currentAmount"
-                  >
-                    {stockSummaries.map((entry, index) => (
-                      <Cell
-                        key={`cell-${index}`}
-                        fill={COLORS[index % COLORS.length]}
-                      />
-                    ))}
-                  </Pie>
-                  <Tooltip
-                    formatter={(value) => `${value.toLocaleString()}원`}
-                    contentStyle={{
-                      borderRadius: "8px",
-                      border: "none",
-                      boxShadow: "0 4px 6px rgba(0,0,0,0.1)",
-                    }}
-                  />
-                  <Legend
-                    verticalAlign="bottom"
-                    height={36}
-                    iconType="circle"
-                    
-                    formatter={(value, entry) => (
-                      <span className="text-xs font-medium text-slate-600 ml-1">
-                        {value}
-                      </span>
-                    )}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
-              {/* Center Text */}
-              <div className="absolute top-[35%] left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-center pointer-events-none">
-                <p className="text-xs text-slate-400">Total</p>
-                <p className="text-lg font-bold text-slate-800">100%</p>
-              </div>
-            </div>
-          </div>
-        </div>
+            <AssetPieChart data={pieData} />
+          </Card>
 
-        {/* 2. Stock Summaries (종목별 합계) */}
-        <div className="mb-10">
-          <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2 mb-4">
-            <Layers className="w-5 h-5 text-indigo-500" />
-            종목별 현황
-          </h2>
+          <PortfolioInsights
+            holdings={holdings.map(h => ({
+              name: h.name,
+              ticker: h.ticker,
+              currentAmount: h.currentPrice * h.quantity,
+              yield: h.avgPrice > 0 ? ((h.currentPrice - h.avgPrice) / h.avgPrice) * 100 : 0
+            }))}
+            cashTotal={deposit} // Use only deposit for 'investment' cash ratio if needed, or keep for full analysis
+          />
+        </Col>
 
-          {/* Desktop Table View for Summaries */}
-          <div className="hidden md:block bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-            <table className="w-full text-sm text-left">
-              <thead className="bg-indigo-50/50 text-slate-500 font-medium border-b border-indigo-100">
-                <tr>
-                  <th className="px-6 py-4">종목명</th>
-                  <th className="px-6 py-4 text-right">보유수량</th>
-                  <th className="px-6 py-4 text-right">평균단가</th>
-                  <th className="px-6 py-4 text-right">매수금액</th>
-                  <th className="px-6 py-4 text-right">현재가</th>
-                  <th className="px-6 py-4 text-right">평가금액</th>
-                  <th className="px-6 py-4 text-right">평가손익(세후)</th>
-                  <th className="px-6 py-4 text-right">수익률</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {stockSummaries.map((stock) => {
-                  const isProfit = stock.netProfit >= 0;
-                  return (
-                    <tr
-                      key={stock.code}
-                      className="hover:bg-slate-50 transition-colors"
-                    >
-                      <td className="px-6 py-4">
-                        <div className="font-bold text-slate-800 text-base">
-                          {stock.name}
-                        </div>
-                        <div className="text-xs text-slate-400">
-                          {stock.code}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 text-right font-medium text-slate-700">
-                        {stock.quantity.toLocaleString()}
-                      </td>
-                      <td className="px-6 py-4 text-right text-slate-600">
-                        {stock.avgBuyPrice.toLocaleString()}
-                      </td>
-                      <td className="px-6 py-4 text-right text-slate-600">
-                        {stock.buyAmount.toLocaleString()}
-                      </td>
-                      <td
-                        className={`px-6 py-4 text-right font-medium ${
-                          isProfit ? "text-red-500" : "text-blue-500"
-                        }`}
-                      >
-                        {stock.currentPrice.toLocaleString()}
-                      </td>
-                      <td className="px-6 py-4 text-right font-bold text-slate-800">
-                        {stock.currentAmount.toLocaleString()}
-                      </td>
-                      <td
-                        className={`px-6 py-4 text-right font-bold ${
-                          isProfit ? "text-red-600" : "text-blue-600"
-                        }`}
-                      >
-                        {isProfit ? "+" : ""}
-                        {stock.netProfit.toLocaleString()}
-                      </td>
-                      <td className="px-6 py-4 text-right">
-                        <span
-                          className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold ${
-                            isProfit
-                              ? "bg-red-50 text-red-700"
-                              : "bg-blue-50 text-blue-700"
-                          }`}
-                        >
-                          {isProfit ? "+" : ""}
-                          {stock.returnRate}%
-                        </span>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-
-          {/* Mobile Card View for Summaries */}
-          <div className="md:hidden grid grid-cols-1 gap-4">
-            {stockSummaries.map((stock) => (
-              <StockSummaryCard key={stock.code} stock={stock} />
-            ))}
-          </div>
-        </div>
-
-        {/* 3. Detailed Holdings (상세 내역) */}
-        <div>
-          <div className="px-1 py-4 flex justify-between items-center">
-            <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-              <Calendar className="w-5 h-5 text-slate-500" />
-              상세 거래 내역
-            </h2>
-            <span className="text-xs text-slate-400 hidden sm:inline">
-              *수수료 및 제세금 포함 예상치
-            </span>
-          </div>
-
-          {/* Desktop Table */}
-          <div className="hidden md:block bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm text-left">
-                <thead className="bg-slate-50 text-slate-500 font-medium border-b border-slate-200">
-                  <tr>
-                    <th className="px-6 py-4">종목명</th>
-                    <th className="px-6 py-4">매수일자</th>
-                    <th className="px-6 py-4 text-right">수량</th>
-                    <th className="px-6 py-4 text-right">매수단가</th>
-                    <th className="px-6 py-4 text-right">매수금액</th>
-                    <th className="px-6 py-4 text-right">현재가</th>
-                    <th className="px-6 py-4 text-right">평가손익</th>
-                    <th className="px-6 py-4 text-right">수익률</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {analyzedHoldings.map((item) => {
-                    const isItemProfit = item.netProfit >= 0;
-                    return (
-                      <tr
-                        key={item.id}
-                        className="hover:bg-slate-50/80 transition-colors"
-                      >
-                        <td className="px-6 py-4 font-semibold text-slate-800">
-                          {item.name}
-                        </td>
-                        <td className="px-6 py-4 text-slate-600">
-                          {item.date}
-                        </td>
-                        <td className="px-6 py-4 text-right text-slate-700">
-                          {item.quantity.toLocaleString()}
-                        </td>
-                        <td className="px-6 py-4 text-right text-slate-600">
-                          {item.buyPrice.toLocaleString()}
-                        </td>
-                        <td className="px-6 py-4 text-right text-slate-600">
-                          {item.buyAmount.toLocaleString()}
-                        </td>
-                        <td
-                          className={`px-6 py-4 text-right font-medium ${
-                            isItemProfit ? "text-red-500" : "text-blue-500"
-                          }`}
-                        >
-                          {item.currentPrice.toLocaleString()}
-                        </td>
-                        <td
-                          className={`px-6 py-4 text-right font-medium ${
-                            isItemProfit ? "text-red-600" : "text-blue-600"
-                          }`}
-                        >
-                          {isItemProfit ? "+" : ""}
-                          {item.netProfit.toLocaleString()}
-                        </td>
-                        <td
-                          className={`px-6 py-4 text-right ${
-                            isItemProfit ? "text-red-600" : "text-blue-600"
-                          }`}
-                        >
-                          {isItemProfit ? "+" : ""}
-                          {item.returnRate}%
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+        {/* Right Section: Main Table Area turned into Card Grid Area */}
+        <Col xs={24} lg={15}>
+          <div className="flex justify-between items-center mb-6 pl-2">
+            <Space size={12}>
+              <div className="w-2 h-6 bg-blue-500 rounded-full shadow-[0_0_12px_rgba(59,130,246,0.5)]" />
+              <Title level={4} style={{ margin: 0, fontWeight: 800, color: 'var(--foreground)' }}>보유 종목 리포트</Title>
+            </Space>
+            <div className="glass-card px-4 py-1.5 rounded-full border border-white/40">
+              <Text type="secondary" style={{ fontSize: 11, fontWeight: 700, color: '#64748b' }}>단위: KRW • 세후</Text>
             </div>
           </div>
 
-          {/* Mobile List for Details */}
-          <div className="md:hidden space-y-3">
-            {analyzedHoldings.map((item) => {
-              const isItemProfit = item.netProfit >= 0;
-              return (
-                <div
-                  key={item.id}
-                  className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm text-sm"
-                >
-                  <div className="flex justify-between items-center mb-2">
-                    <span className="font-bold text-slate-700">
-                      {item.name}
-                    </span>
-                    <span className="text-slate-400 text-xs">{item.date}</span>
-                  </div>
-                  <div className="flex justify-between text-slate-600 mb-1">
-                    <span>
-                      {item.quantity}주 @ {item.buyPrice.toLocaleString()}
-                    </span>
-                    <span
-                      className={`${
-                        isItemProfit ? "text-red-500" : "text-blue-500"
-                      } font-medium`}
-                    >
-                      {isItemProfit ? "+" : ""}
-                      {item.returnRate}%
-                    </span>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      </main>
-    </div>
+          <StockTable
+            data={holdings}
+            onRowClick={handleRowClick}
+          />
+        </Col>
+      </Row>
+
+      {/* Transaction Detail Drawer */}
+      <TransactionDrawer
+        open={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+        ticker={selectedStock?.ticker || ''}
+        stockName={selectedStock?.name || ''}
+        transactions={transactions}
+        currentPrice={selectedStock?.currentPrice || 0} // Pass real-time currentPrice
+        changeRate={selectedStock?.changeRate || 0} // Pass daily change rate
+        onTransactionSuccess={onTransactionSuccess}
+      />
+    </main>
   );
 }

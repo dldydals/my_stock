@@ -1,0 +1,60 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Asset {
+  id           Int      @id @default(autoincrement())
+  ticker       String   @unique
+  name         String
+  quantity     Int      @default(0)
+  avgPrice     Float    @default(0) @map("avg_price")
+  currentPrice Float    @default(0) @map("current_price")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@map("assets")
+}
+
+model Transaction {
+  id                  Int             @id @default(autoincrement())
+  ticker              String
+  type                TransactionType
+  quantity            Int
+  price               Float
+  fee                 Float           @default(0)
+  tradeDate           DateTime        @map("trade_date")
+  name                String          @default("")
+  parentTransactionId Int?            @map("parent_transaction_id")
+  realizedProfit      Float?          @map("realized_profit")
+  remainingQuantity   Int             @default(0) @map("remaining_quantity")
+
+  @@map("transactions")
+}
+
+model Dividend {
+  id           Int      @id @default(autoincrement())
+  ticker       String
+  amount       Float
+  tax          Float    @default(0)
+  receivedDate DateTime @map("received_date")
+
+  @@map("dividends")
+}
+
+model CashAccount {
+  id        Int      @id @default(autoincrement())
+  type      String   @unique
+  balance   Float    @default(0)
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("cash_accounts")
+}
+
+enum TransactionType {
+  BUY
+  SELL
+}

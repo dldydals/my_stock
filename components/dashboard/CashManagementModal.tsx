@@ -1,6 +1,8 @@
-import React, { useState, useEffect } from "react";
-import { X, Save } from "lucide-react";
+import React, { useEffect } from "react";
+import { Modal, Form, InputNumber, Divider, Typography } from "antd";
 import { CashData } from "./types";
+
+const { Text } = Typography;
 
 interface Props {
     isOpen: boolean;
@@ -9,104 +11,99 @@ interface Props {
     onUpdate: (data: CashData) => void;
 }
 
-export const CashManagementModal: React.FC<Props> = ({
+export default function CashManagementModal({
     isOpen,
     onClose,
     cashData,
     onUpdate,
-}) => {
-    const [deposit, setDeposit] = useState<number>(0);
-    const [cma, setCma] = useState<number>(0);
+}: Props) {
+    const [form] = Form.useForm();
 
     useEffect(() => {
         if (isOpen) {
-            setDeposit(cashData.deposit);
-            setCma(cashData.cma);
+            form.setFieldsValue({
+                deposit: cashData.deposit,
+                cma: cashData.cma,
+            });
         }
-    }, [isOpen, cashData]);
+    }, [isOpen, cashData, form]);
 
-    if (!isOpen) return null;
-
-    const handleSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
-        onUpdate({ deposit, cma });
-        onClose();
+    const handleOk = async () => {
+        try {
+            const values = await form.validateFields();
+            onUpdate({
+                deposit: values.deposit || 0,
+                cma: values.cma || 0,
+            });
+            onClose();
+        } catch (error) {
+            console.error("Validation failed:", error);
+        }
     };
 
     return (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-            {/* Backdrop */}
-            <div
-                className="absolute inset-0 bg-black/30 backdrop-blur-sm transition-opacity"
-                onClick={onClose}
-            />
+        <Modal
+            title={<Text strong style={{ fontSize: 16 }}>현금 자산 관리</Text>}
+            open={isOpen}
+            onOk={handleOk}
+            onCancel={onClose}
+            okText="저장하기"
+            cancelText="취소"
+            width={400}
+            centered
+            destroyOnClose
+        >
+            <Form
+                form={form}
+                layout="vertical"
+                initialValues={{ deposit: 0, cma: 0 }}
+                style={{ marginTop: 24 }}
+            >
+                <Form.Item
+                    name="deposit"
+                    label={<Text style={{ fontSize: 13, fontWeight: 600 }}>예수금 (D+2)</Text>}
+                    rules={[{ required: true, message: '예수금을 입력해주세요' }]}
+                >
+                    <InputNumber
+                        style={{ width: '100%' }}
+                        size="large"
+                        formatter={(value) => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+                        parser={(value) => value!.replace(/\$\s?|(,*)/g, '')}
+                        addonAfter="원"
+                    />
+                </Form.Item>
 
-            {/* Modal Content */}
-            <div className="relative bg-white rounded-3xl shadow-2xl w-full max-w-sm overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+                <Form.Item
+                    name="cma"
+                    label={<Text style={{ fontSize: 13, fontWeight: 600 }}>CMA / 기타 현금</Text>}
+                    rules={[{ required: true, message: 'CMA 잔액을 입력해주세요' }]}
+                >
+                    <InputNumber
+                        style={{ width: '100%' }}
+                        size="large"
+                        formatter={(value) => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+                        parser={(value) => value!.replace(/\$\s?|(,*)/g, '')}
+                        addonAfter="원"
+                    />
+                </Form.Item>
 
-                {/* Header */}
-                <div className="bg-gray-50/80 px-6 py-4 flex justify-between items-center border-b border-gray-100">
-                    <h3 className="text-lg font-bold text-gray-900">현금 자산 관리</h3>
-                    <button
-                        onClick={onClose}
-                        className="p-2 -mr-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-colors"
-                    >
-                        <X className="w-5 h-5" />
-                    </button>
+                <Divider style={{ margin: '12px 0' }} />
+
+                <div className="bg-slate-50 p-4 rounded-xl flex justify-between items-center">
+                    <Text type="secondary" style={{ fontSize: 13 }}>총 현금 자산</Text>
+                    <Form.Item shouldUpdate noStyle>
+                        {({ getFieldsValue }) => {
+                            const { deposit = 0, cma = 0 } = getFieldsValue();
+                            return (
+                                <Text strong style={{ fontSize: 18, color: '#003a8c' }}>
+                                    {(deposit + cma).toLocaleString()}원
+                                </Text>
+                            );
+                        }}
+                    </Form.Item>
                 </div>
-
-                {/* Body */}
-                <div className="p-6">
-                    <form onSubmit={handleSubmit} className="space-y-5">
-                        <div>
-                            <label className="block text-sm font-semibold text-gray-700 mb-2">
-                                예수금 (D+2)
-                            </label>
-                            <div className="relative">
-                                <input
-                                    type="number"
-                                    value={deposit}
-                                    onChange={(e) => setDeposit(Number(e.target.value))}
-                                    className="w-full pl-4 pr-10 py-3 rounded-xl border border-gray-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 font-bold text-gray-800 transition-all outline-none"
-                                    placeholder="0"
-                                />
-                                <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm text-gray-400 font-medium">원</span>
-                            </div>
-                        </div>
-
-                        <div>
-                            <label className="block text-sm font-semibold text-gray-700 mb-2">
-                                CMA / 기타 현금
-                            </label>
-                            <div className="relative">
-                                <input
-                                    type="number"
-                                    value={cma}
-                                    onChange={(e) => setCma(Number(e.target.value))}
-                                    className="w-full pl-4 pr-10 py-3 rounded-xl border border-gray-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 font-bold text-gray-800 transition-all outline-none"
-                                    placeholder="0"
-                                />
-                                <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm text-gray-400 font-medium">원</span>
-                            </div>
-                        </div>
-
-                        <div className="pt-2">
-                            <div className="bg-indigo-50 rounded-xl p-4 flex justify-between items-center mb-6">
-                                <span className="text-sm text-gray-600 font-medium">합계</span>
-                                <span className="text-lg font-extrabold text-indigo-700">{(deposit + cma).toLocaleString()}원</span>
-                            </div>
-
-                            <button
-                                type="submit"
-                                className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3.5 rounded-xl transition-colors flex items-center justify-center gap-2 shadow-lg shadow-indigo-200"
-                            >
-                                <Save className="w-5 h-5" /> 저장하기
-                            </button>
-                        </div>
-                    </form>
-                </div>
-
-            </div>
-        </div>
+            </Form>
+        </Modal>
     );
-};
+}
+;

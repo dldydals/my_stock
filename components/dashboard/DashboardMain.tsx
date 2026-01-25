@@ -17,7 +17,7 @@ import { StockSummaryCard } from "./StockSummaryCard";
 import { PortfolioChart } from "./PortfolioChart";
 import { TransactionDetailModal } from "./TransactionDetailModal";
 import { AddTransactionModal } from "./AddTransactionModal";
-import { CashManagementModal } from "./CashManagementModal";
+import CashManagementModal from "./CashManagementModal";
 import { AnalyzedHolding } from "./types";
 
 export default function DashboardMain() {
@@ -419,7 +419,7 @@ export default function DashboardMain() {
                           {item.quantity.toLocaleString()}
                         </td>
                         <td className="px-6 py-2 text-right text-gray-500">
-                          {item.buyPrice.toLocaleString()}
+                          {(item.buyPrice || 0).toLocaleString()}
                         </td>
                         <td className="px-6 py-2 text-right font-medium">
                           {(item.currentPrice || 0).toLocaleString()}
@@ -470,7 +470,7 @@ export default function DashboardMain() {
                       {item.returnRate}%
                     </div>
                     <div className="text-xs text-gray-500 mt-0.5">
-                      {item.buyPrice.toLocaleString()}원
+                      {(item.buyPrice || 0).toLocaleString()}원
                     </div>
                   </div>
                 </div>

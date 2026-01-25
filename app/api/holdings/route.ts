@@ -1,75 +1,73 @@
 import { NextResponse } from 'next/server';
-import fs from 'fs/promises';
-import path from 'path';
-
-const DATA_FILE_PATH = path.join(process.cwd(), 'data', 'stock-holdings.json');
-
-async function ensureDataFile() {
-    try {
-        await fs.access(DATA_FILE_PATH);
-    } catch {
-        const dir = path.dirname(DATA_FILE_PATH);
-        try {
-            await fs.access(dir);
-        } catch {
-            await fs.mkdir(dir, { recursive: true });
-        }
-        await fs.writeFile(DATA_FILE_PATH, '[]', 'utf-8');
-    }
-}
+import prisma from '@/lib/db';
 
 export async function GET() {
     try {
-        await ensureDataFile();
-        const data = await fs.readFile(DATA_FILE_PATH, 'utf-8');
-        const holdings = JSON.parse(data);
-        return NextResponse.json(holdings);
-    } catch (error) {
-        console.error('Error reading holdings data:', error);
-        return NextResponse.json({ error: 'Failed to read holdings data' }, { status: 500 });
-    }
-}
+        const assets = await prisma.asset.findMany({
+            orderBy: { ticker: 'asc' },
+        });
 
-export async function POST(req: Request) {
-    try {
-        await ensureDataFile();
-        const newHolding = await req.json();
-        const data = await fs.readFile(DATA_FILE_PATH, "utf8");
-        const holdings: any[] = JSON.parse(data);
-
-        // Assign a new ID (simple max + 1 logic)
-        const maxId = holdings.reduce((max, h) => Math.max(max, h.id || 0), 0);
-        const holdingWithId = { ...newHolding, id: maxId + 1 };
-
-        holdings.push(holdingWithId);
-
-        await fs.writeFile(DATA_FILE_PATH, JSON.stringify(holdings, null, 2));
-
-        return NextResponse.json(holdingWithId);
-    } catch (e) {
-        return NextResponse.json({ error: "Failed to save data" }, { status: 500 });
-    }
-}
-
-export async function DELETE(req: Request) {
-    try {
-        await ensureDataFile();
-        const { searchParams } = new URL(req.url);
-        const id = searchParams.get('id');
-
-        if (!id) {
-            return NextResponse.json({ error: "ID is required" }, { status: 400 });
+        if (!assets || assets.length === 0) {
+            return NextResponse.json([]);
         }
 
-        const data = await fs.readFile(DATA_FILE_PATH, "utf8");
-        let holdings: any[] = JSON.parse(data);
+        // Real-time price sync from Python API
+        const updatedAssets = await Promise.all(assets.map(async (asset) => {
+            try {
+                const res = await fetch(`http://localhost:8000/price/${asset.ticker}`);
+                const data = await res.json();
+                if (data.price) {
+                    await prisma.asset.update({
+                        where: { id: asset.id },
+                        data: { currentPrice: data.price }
+                    });
+                    return { ...asset, currentPrice: data.price, changeRate: data.change_rate || 0 };
+                }
+            } catch (e) {
+                console.error(`Failed to sync price for ${asset.ticker}`);
+            }
+            return asset;
+        }));
 
-        holdings = holdings.filter((h) => h.id !== Number(id));
+        // UI에서 기대하는 형식으로 변환
+        const formattedAssets = updatedAssets.map(asset => {
+            const qty = asset.quantity;
+            const curPrice = asset.currentPrice;
+            const buyCost = asset.avgPrice * qty; // avgPrice already includes buy fees in trigger.sql
+            const sellValue = curPrice * qty;
 
-        await fs.writeFile(DATA_FILE_PATH, JSON.stringify(holdings, null, 2));
+            // Estimated Sell Fees (Match calculateFees logic in frontend)
+            const sellCommission = sellValue * 0.00015;
+            const sellTax = sellValue * 0.0018;
+            const estSellFees = Math.floor(sellCommission + sellTax);
 
-        return NextResponse.json({ success: true });
-    } catch (e) {
-        return NextResponse.json({ error: "Failed to delete data" }, { status: 500 });
+            const netPnL = sellValue - buyCost - estSellFees;
+            const yieldRate = buyCost > 0 ? (netPnL / buyCost) * 100 : 0;
+
+            return {
+                key: asset.id.toString(),
+                ticker: asset.ticker,
+                name: asset.name,
+                quantity: qty,
+                avgPrice: asset.avgPrice,
+                currentPrice: curPrice,
+                changeRate: (asset as any).changeRate || 0,
+                yield: yieldRate,
+                PnL: netPnL,
+                allocation: 0,
+            };
+        });
+
+        const totalCurrentValue = formattedAssets.reduce((sum, a) => sum + (a.currentPrice * a.quantity), 0);
+
+        const finalData = formattedAssets.map(a => ({
+            ...a,
+            allocation: totalCurrentValue > 0 ? ((a.currentPrice * a.quantity) / totalCurrentValue) * 100 : 0
+        })).sort((a, b) => b.allocation - a.allocation); // Sort by allocation descending
+
+        return NextResponse.json(finalData);
+    } catch (error) {
+        console.error('Failed to fetch holdings:', error);
+        return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
     }
 }
