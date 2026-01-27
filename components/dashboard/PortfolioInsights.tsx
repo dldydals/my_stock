@@ -42,7 +42,7 @@ export default function PortfolioInsights({ holdings, cashTotal }: PortfolioInsi
 
     return (
         <Card
-            className="glass-card mt-6 overflow-hidden transition-all duration-300 hover:shadow-lg"
+            className="glass-card overflow-hidden transition-all duration-300 hover:shadow-lg"
             styles={{
                 header: { borderBottom: '1px solid rgba(0, 0, 0, 0.05)', minHeight: 40 },
                 body: { padding: '24px' }
@@ -78,7 +78,7 @@ export default function PortfolioInsights({ holdings, cashTotal }: PortfolioInsi
                 </Col>
 
                 <Col xs={24} md={12}>
-                    <div className="bg-transparent dark:bg-slate-200/40 p-4 rounded-xl h-full border border-slate-100 dark:border-slate-300">
+                    <div className="bg-transparent dark:bg-slate-10/40 p-4 rounded-xl h-full border border-slate-100 dark:border-slate-300">
                         <div className="flex justify-between items-center mb-3">
                             <Text strong style={{ fontSize: 13, color: 'var(--foreground)' }}><DollarOutlined className="mr-1" /> 현금 비중 리포트</Text>
                             <Tag color={cashRatio > 20 ? 'blue' : 'orange'} style={{ borderRadius: 4, margin: 0 }}>{cashRatio.toFixed(1)}%</Tag>

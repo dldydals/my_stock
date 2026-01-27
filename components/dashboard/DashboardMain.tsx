@@ -21,7 +21,7 @@ import CashManagementModal from "./CashManagementModal";
 import { AnalyzedHolding } from "./types";
 
 export default function DashboardMain() {
-  const { analyzedHoldings, stockSummaries, portfolioSummary, addHolding, removeHolding, cashData, updateCash } = useStockData();
+  const { analyzedHoldings, stockSummaries, portfolioSummary, addHolding, removeHolding, cashData, updateCash, lastUpdate } = useStockData();
   const isTotalProfit = portfolioSummary.totalNetProfit >= 0;
 
   const [selectedTransactionId, setSelectedTransactionId] = useState<number | null>(null);
@@ -61,11 +61,17 @@ export default function DashboardMain() {
             </h1>
           </div>
           <div
-            className="flex items-center gap-2 text-sm text-slate-500 bg-gray-100 px-3 py-1 rounded-full font-medium"
+            className="flex items-center gap-3 text-sm text-slate-500 bg-gray-50/50 px-4 py-1.5 rounded-full font-medium border border-gray-100"
             suppressHydrationWarning={true}
           >
-            <Calendar className="w-3.5 h-3.5" />
-            {new Date().toLocaleDateString()}
+            <div className="flex items-center gap-1.5 border-r border-gray-200 pr-3 mr-1">
+              <Calendar className="w-3.5 h-3.5 text-indigo-500" />
+              {new Date().toLocaleDateString()}
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
+              <span className="text-xs opacity-70">실시간 {lastUpdate || "연결 중..."}</span>
+            </div>
           </div>
         </div>
       </header>

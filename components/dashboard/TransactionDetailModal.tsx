@@ -146,7 +146,7 @@ export const TransactionDetailModal: React.FC<Props> = ({
                         <div>
                             <p className="text-sm text-gray-500 mb-1">평가손익</p>
                             <p className={`text-xl font-extrabold ${profitColor}`}>
-                                {isProfit ? "+" : ""}{transaction.netProfit.toLocaleString()}원
+                                {isProfit ? "+" : ""}{Math.round(transaction.netProfit).toLocaleString()}원
                             </p>
                         </div>
                         <div className="text-right">
@@ -184,7 +184,7 @@ export const TransactionDetailModal: React.FC<Props> = ({
                                 <div className="text-gray-500 text-sm font-medium">예상 손익</div>
                                 <div className="text-right">
                                     <p className={`font-extrabold ${simProfitColor}`}>
-                                        {isSimProfit ? "+" : ""}{simNetProfit.toLocaleString()}원
+                                        {isSimProfit ? "+" : ""}{Math.round(simNetProfit).toLocaleString()}원
                                     </p>
                                     <p className={`text-xs ${simProfitColor} font-bold mt-0.5`}>
                                         ({isSimProfit ? "+" : ""}{simReturnRate}%)

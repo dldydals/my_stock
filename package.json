@@ -8,7 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "python-api": "run-script-os",
-    "python-api:linux": "cd python && /home/ymlee/Dev/.venv/bin/python -u -m uvicorn stock_api:app --reload --port 8000",
+    "python-api:linux": "cd python && python3 -m uvicorn stock_api:app --reload --port 8000",
     "python-api:win32": "cd python && python -m uvicorn stock_api:app --reload --port 8000",
     "mystock": "concurrently --kill-others \"npm run python-api\" \"npm run dev\"",
     "db:migrate-data": "tsx scripts/migrate.ts"

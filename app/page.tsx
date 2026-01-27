@@ -1,8 +1,9 @@
 'use client';
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { Row, Col, Divider, Typography, Breadcrumb, Space, Button, Card } from 'antd';
+import { Row, Col, Divider, Typography, Breadcrumb, Space, Button, Card, Modal, Form, Input, InputNumber, DatePicker, message } from 'antd';
 import { ReloadOutlined, DatabaseOutlined } from '@ant-design/icons';
+import dayjs from 'dayjs';
 import SummaryStats from '../components/dashboard/SummaryStats';
 import AssetPieChart from '../components/dashboard/AssetPieChart';
 import StockTable from '../components/dashboard/StockTable';
@@ -15,11 +16,13 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const [holdings, setHoldings] = useState<any[]>([]);
   const [balances, setBalances] = useState<any[]>([]);
-  const [dividendStats, setDividendStats] = useState<Record<string, number>>({});
   const [transactions, setTransactions] = useState<any[]>([]);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [selectedStock, setSelectedStock] = useState<any>(null);
   const [cashModalOpen, setCashModalOpen] = useState(false);
+  const [lastSyncTime, setLastSyncTime] = useState<string>("");
+  const [newStockModalOpen, setNewStockModalOpen] = useState(false);
+  const [newStockForm] = Form.useForm();
 
   const fetchData = async () => {
     setLoading(true);
@@ -34,60 +37,51 @@ export default function Home() {
 
       if (!holdData.error) {
         setHoldings(holdData);
-        // Fetch supplemental dividend data from Python API for each unique ticker
-        const divYields: Record<string, number> = {};
-        await Promise.all(holdData.map(async (h: any) => {
-          try {
-            const res = await fetch(`http://localhost:8000/stock/${h.ticker}`);
-            const detail = await res.json();
-            if (detail.dividend_yield) {
-              divYields[h.ticker] = detail.dividend_yield;
-            }
-          } catch (e) {
-            console.warn(`Failed to fetch dividend for ${h.ticker}`, e);
-          }
-        }));
-        setDividendStats(divYields);
       }
 
       if (!cashData.error) {
         setBalances([
           { type: 'DEPOSIT', balance: cashData.deposit },
-          { type: 'CMA', balance: cashData.cma }
+          { type: 'CMA', balance: cashData.cma },
+          { type: 'TOTAL_DEPOSIT', balance: cashData.totalDeposit },
+          { type: 'TOTAL_WITHDRAWAL', balance: cashData.totalWithdrawal }
         ]);
       }
     } catch (e) {
       console.error("Data fetch failed", e);
     } finally {
       setLoading(false);
+      setLastSyncTime(new Date().toLocaleTimeString());
     }
   };
 
   useEffect(() => {
     fetchData();
+    // 10초마다 자동 갱신
+    const interval = setInterval(fetchData, 10000);
+    return () => clearInterval(interval);
   }, []);
 
   const totalAssetsValue = useMemo(() => holdings.reduce((sum, item) => sum + (item.currentPrice * item.quantity), 0), [holdings]);
   const totalBuyAmount = useMemo(() => holdings.reduce((sum, item) => sum + (item.avgPrice * item.quantity), 0), [holdings]);
   const totalPnL = totalAssetsValue - totalBuyAmount;
 
-  // Real Dividend Calculation: (currentPrice * qty) * (dividendYield / 100)
-  const expectedDividends = useMemo(() => {
-    return holdings.reduce((sum, item) => {
-      const yieldRate = dividendStats[item.ticker] || 0;
-      const amount = (item.currentPrice * item.quantity) * (yieldRate / 100);
-      return sum + amount;
-    }, 0);
-  }, [holdings, dividendStats]);
 
   const deposit = useMemo(() => balances.find(b => b.type === 'DEPOSIT')?.balance || 0, [balances]);
   const cma = useMemo(() => balances.find(b => b.type === 'CMA')?.balance || 0, [balances]);
+  const totalDeposit = useMemo(() => balances.find(b => b.type === 'TOTAL_DEPOSIT')?.balance || 0, [balances]);
+  const totalWithdrawal = useMemo(() => balances.find(b => b.type === 'TOTAL_WITHDRAWAL')?.balance || 0, [balances]);
+
+  // 실시간 선택된 종목 데이터 트래킹
+  const latestSelectedStock = useMemo(() =>
+    holdings.find(h => h.ticker === selectedStock?.ticker) || selectedStock
+    , [holdings, selectedStock]);
 
   const pieData = useMemo(() => [
     ...holdings.map(item => ({ type: item.name, value: item.currentPrice * item.quantity })),
     { type: '예수금', value: deposit },
     { type: 'CMA', value: cma }
-  ], [holdings, deposit, cma]);
+  ].filter(item => item.value > 0), [holdings, deposit, cma]);
 
   const handleRowClick = async (record: any) => {
     setSelectedStock(record);
@@ -112,7 +106,7 @@ export default function Home() {
     fetchData();
   };
 
-  const handleCashUpdate = async (data: { deposit: number; cma: number }) => {
+  const handleCashUpdate = async (data: { deposit?: number; cma?: number; totalDeposit?: number; totalWithdrawal?: number }) => {
     try {
       const res = await fetch('/api/cash', {
         method: 'POST',
@@ -129,6 +123,37 @@ export default function Home() {
       }
     } catch (e) {
       console.error("Cash update failed", e);
+    }
+  };
+
+  const handleNewStockSubmit = async () => {
+    try {
+      const values = await newStockForm.validateFields();
+
+      const res = await fetch('/api/transactions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ticker: values.ticker.padStart(6, '0'),
+          name: values.name,
+          type: 'BUY',
+          quantity: values.quantity,
+          price: values.price,
+          fee: values.fee || 0,
+          tradeDate: values.tradeDate.toISOString(),
+        }),
+      });
+
+      if (res.ok) {
+        message.success('신규 종목 매수가 등록되었습니다.');
+        setNewStockModalOpen(false);
+        newStockForm.resetFields();
+        await fetchData();
+      } else {
+        message.error('등록 중 오류가 발생했습니다.');
+      }
+    } catch (e) {
+      console.error(e);
     }
   };
 
@@ -157,8 +182,25 @@ export default function Home() {
         <div className="flex items-center gap-6">
           <div className="hidden sm:flex flex-col items-end">
             <Text type="secondary" style={{ fontSize: 10, fontWeight: 600, color: '#94a3b8' }}>LAST SYNC</Text>
-            <Text className="font-numeric" strong style={{ fontSize: 14, color: 'var(--foreground)', opacity: 0.9 }}>{mounted ? new Date().toLocaleTimeString() : '--:--:--'}</Text>
+            <Text className="font-numeric" strong style={{ fontSize: 14, color: 'var(--foreground)', opacity: 0.9 }}>{lastSyncTime || '--:--:--'}</Text>
           </div>
+          <Button
+            size="large"
+            type="default"
+            onClick={() => setNewStockModalOpen(true)}
+            style={{
+              borderRadius: 14,
+              height: 48,
+              padding: '0 24px',
+              fontWeight: 700,
+              background: '#10b981',
+              borderColor: '#10b981',
+              color: 'white',
+              marginRight: 12
+            }}
+          >
+            + 신규 종목 매수
+          </Button>
           <Button
             size="large"
             type="primary"
@@ -183,39 +225,43 @@ export default function Home() {
       <Row gutter={[24, 24]}>
         {/* Left Section: Stats and Chart */}
         <Col xs={24} lg={9}>
-          <SummaryStats
-            totalAssets={totalAssetsValue}
-            todayPnL={totalPnL}
-            expectedDividends={expectedDividends}
-            cashDeposit={deposit}
-            cashCma={cma}
-            onUpdateCash={handleCashUpdate}
-          />
-          <Card
-            className="shadow-sm border-slate-100 dark:border-slate-800 overflow-hidden"
-            styles={{
-              header: { background: 'rgba(52, 211, 153, 0.05)', borderBottom: '1px solid rgba(52, 211, 153, 0.1)', minHeight: 40 },
-              body: { padding: '20px 16px' }
-            }}
-            title={
-              <Space size={8}>
-                <div className="w-1.5 h-4 bg-emerald-500 rounded-full shadow-[0_0_8px_rgba(16,185,129,0.3)]" />
-                <span className="text-sm font-bold" style={{ color: 'var(--foreground)', opacity: 0.8 }}>자산 배분 현황</span>
-              </Space>
-            }
-          >
-            <AssetPieChart data={pieData} />
-          </Card>
+          <Space orientation="vertical" size={32} style={{ width: '100%' }}>
+            <SummaryStats
+              totalAssets={totalAssetsValue}
+              todayPnL={totalPnL}
+              totalBuyAmount={totalBuyAmount}
+              cashDeposit={deposit}
+              cashCma={cma}
+              totalCumulativeDeposit={totalDeposit}
+              totalCumulativeWithdrawal={totalWithdrawal}
+              onUpdateCash={handleCashUpdate}
+            />
+            <Card
+              className="shadow-sm border-slate-100 dark:border-slate-800 overflow-hidden"
+              styles={{
+                header: { background: 'rgba(52, 211, 153, 0.05)', borderBottom: '1px solid rgba(52, 211, 153, 0.1)', minHeight: 40 },
+                body: { padding: '20px 16px' }
+              }}
+              title={
+                <Space size={8} orientation="horizontal">
+                  <div className="w-1.5 h-4 bg-emerald-500 rounded-full shadow-[0_0_8px_rgba(16,185,129,0.3)]" />
+                  <span className="text-sm font-bold" style={{ color: 'var(--foreground)', opacity: 0.8 }}>자산 배분 현황</span>
+                </Space>
+              }
+            >
+              <AssetPieChart data={pieData} />
+            </Card>
 
-          <PortfolioInsights
-            holdings={holdings.map(h => ({
-              name: h.name,
-              ticker: h.ticker,
-              currentAmount: h.currentPrice * h.quantity,
-              yield: h.avgPrice > 0 ? ((h.currentPrice - h.avgPrice) / h.avgPrice) * 100 : 0
-            }))}
-            cashTotal={deposit} // Use only deposit for 'investment' cash ratio if needed, or keep for full analysis
-          />
+            <PortfolioInsights
+              holdings={holdings.map(h => ({
+                name: h.name,
+                ticker: h.ticker,
+                currentAmount: h.currentPrice * h.quantity,
+                yield: h.avgPrice > 0 ? ((h.currentPrice - h.avgPrice) / h.avgPrice) * 100 : 0
+              }))}
+              cashTotal={deposit + cma}
+            />
+          </Space>
         </Col>
 
         {/* Right Section: Main Table Area turned into Card Grid Area */}
@@ -241,13 +287,85 @@ export default function Home() {
       <TransactionDrawer
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}
-        ticker={selectedStock?.ticker || ''}
-        stockName={selectedStock?.name || ''}
+        ticker={latestSelectedStock?.ticker || ''}
+        stockName={latestSelectedStock?.name || ''}
         transactions={transactions}
-        currentPrice={selectedStock?.currentPrice || 0} // Pass real-time currentPrice
-        changeRate={selectedStock?.changeRate || 0} // Pass daily change rate
+        currentPrice={latestSelectedStock?.currentPrice || 0} // Pass real-time currentPrice
+        changeRate={latestSelectedStock?.changeRate || 0} // Pass daily change rate
         onTransactionSuccess={onTransactionSuccess}
       />
+
+      {/* New Stock Purchase Modal */}
+      <Modal
+        title="신규 종목 매수 등록"
+        open={newStockModalOpen}
+        onCancel={() => setNewStockModalOpen(false)}
+        onOk={handleNewStockSubmit}
+        okText="매수 등록"
+        cancelText="취소"
+        width={500}
+      >
+        <Form form={newStockForm} layout="vertical" style={{ marginTop: 24 }}>
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item
+                name="ticker"
+                label="종목 코드"
+                rules={[{ required: true, message: '종목 코드를 입력해주세요' }]}
+              >
+                <Input placeholder="예: 005930" />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item
+                name="name"
+                label="종목명"
+                rules={[{ required: true, message: '종목명을 입력해주세요' }]}
+              >
+                <Input placeholder="예: 삼성전자" />
+              </Form.Item>
+            </Col>
+          </Row>
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item
+                name="quantity"
+                label="매수 수량"
+                rules={[{ required: true, message: '수량을 입력해주세요' }]}
+                initialValue={1}
+              >
+                <InputNumber min={1} style={{ width: '100%' }} />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item
+                name="price"
+                label="매수 단가"
+                rules={[{ required: true, message: '단가를 입력해주세요' }]}
+              >
+                <InputNumber min={0} style={{ width: '100%' }} />
+              </Form.Item>
+            </Col>
+          </Row>
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item name="fee" label="수수료" initialValue={0}>
+                <InputNumber min={0} style={{ width: '100%' }} />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item
+                name="tradeDate"
+                label="매수 일자"
+                rules={[{ required: true, message: '날짜를 선택해주세요' }]}
+                initialValue={dayjs()}
+              >
+                <DatePicker style={{ width: '100%' }} />
+              </Form.Item>
+            </Col>
+          </Row>
+        </Form>
+      </Modal>
     </main>
   );
 }

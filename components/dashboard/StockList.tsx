@@ -48,9 +48,9 @@ export const StockList: React.FC<Props> = ({ holdings }) => {
                         {item.currentPrice.toLocaleString()}원
                       </span>
                       <span className={`text-xs flex items-center ${rateColor}`}>
-                         {isRise && <TrendingUp className="w-3 h-3 mr-1" />}
-                         {isFall && <TrendingDown className="w-3 h-3 mr-1" />}
-                         {changeRate.toFixed(2)}%
+                        {isRise && <TrendingUp className="w-3 h-3 mr-1" />}
+                        {isFall && <TrendingDown className="w-3 h-3 mr-1" />}
+                        {changeRate.toFixed(2)}%
                       </span>
                     </div>
                   </td>
@@ -60,7 +60,7 @@ export const StockList: React.FC<Props> = ({ holdings }) => {
                   <td className="px-6 py-4 text-right text-gray-600">
                     {item.quantity}주
                   </td>
-                  
+
                   {/* 추가된 정보: PER / 배당률 표시 */}
                   <td className="px-6 py-4 text-right">
                     <div className="flex flex-col items-end text-xs text-gray-500 space-y-0.5">
@@ -70,21 +70,20 @@ export const StockList: React.FC<Props> = ({ holdings }) => {
                         <span>PER -</span>
                       )}
                       {item.dividend_yield && item.dividend_yield > 0 ? (
-                         <span className="text-indigo-500 bg-indigo-50 px-1.5 py-0.5 rounded">
-                           배당 {item.dividend_yield}%
-                         </span>
+                        <span className="text-indigo-500 bg-indigo-50 px-1.5 py-0.5 rounded">
+                          배당 {item.dividend_yield}%
+                        </span>
                       ) : null}
                     </div>
                   </td>
 
                   <td className={`px-6 py-4 text-right font-medium ${isProfit ? "text-red-500" : "text-blue-500"}`}>
-                    {isProfit ? "+" : ""}{item.netProfit.toLocaleString()}원
+                    {isProfit ? "+" : ""}{Math.round(item.netProfit).toLocaleString()}원
                   </td>
                   <td className="px-6 py-4 text-right">
                     <span
-                      className={`px-2.5 py-1 rounded-full text-xs font-bold ${
-                        isProfit ? "bg-red-100 text-red-600" : "bg-blue-100 text-blue-600"
-                      }`}
+                      className={`px-2.5 py-1 rounded-full text-xs font-bold ${isProfit ? "bg-red-100 text-red-600" : "bg-blue-100 text-blue-600"
+                        }`}
                     >
                       {item.returnRate}%
                     </span>

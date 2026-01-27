@@ -7,6 +7,7 @@ export function useStockData() {
   const [marketData, setMarketData] = useState<Record<string, MarketData>>({});
   const [holdings, setHoldings] = useState<Holding[]>([]);
   const [cashData, setCashData] = useState<CashData>({ deposit: 0, cma: 0 });
+  const [lastUpdate, setLastUpdate] = useState<string>("");
   const lastFetchDateRef = useRef<string>("");
 
   // 1. 보유 주식 & 현금 데이터 로드 (API)
@@ -46,7 +47,7 @@ export function useStockData() {
     const fetchAllDetails = async () => {
       try {
         const promises = uniqueCodes.map((code) =>
-          fetch(`http://127.0.0.1:8000/stock/${code}`)
+          fetch(`http://127.0.0.1:8000/stock/${code}`, { cache: 'no-store' })
             .then((res) => (res.ok ? res.json() : null))
             .catch((e) => null)
         );
@@ -84,6 +85,7 @@ export function useStockData() {
               };
             }
           });
+          setLastUpdate(new Date().toLocaleTimeString());
           return nextState;
         });
       } catch (e) { console.error(e); }
@@ -93,7 +95,7 @@ export function useStockData() {
     const interval = setInterval(() => {
       const today = new Date().toLocaleDateString();
       lastFetchDateRef.current !== today ? fetchAllDetails() : fetchPricesOnly();
-    }, 30000);
+    }, 10000);
 
     return () => clearInterval(interval);
   }, [holdings]); // holdings가 로드된 후 실행
@@ -228,5 +230,5 @@ export function useStockData() {
     } catch (e) { console.error("Failed to update cash", e); }
   };
 
-  return { analyzedHoldings, stockSummaries, portfolioSummary, addHolding, removeHolding, cashData, updateCash };
+  return { analyzedHoldings, stockSummaries, portfolioSummary, addHolding, removeHolding, cashData, updateCash, lastUpdate };
 }

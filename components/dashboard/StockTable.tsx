@@ -35,11 +35,11 @@ export default function StockTable({ data, onRowClick }: StockTableProps) {
                     <div
                         key={item.ticker}
                         onClick={() => onRowClick(item)}
-                        className="glass-card group cursor-pointer p-4 rounded-[20px] transition-all duration-300 hover:shadow-xl hover:-translate-y-1 relative overflow-hidden"
+                        className={`glass-card group cursor-pointer p-4 rounded-[20px] transition-all duration-300 hover:shadow-xl hover:-translate-y-1 relative overflow-hidden ${item.quantity === 0 ? 'opacity-60 grayscale-[0.7] bg-slate-50/50' : ''}`}
                         style={{ boxShadow: 'var(--card-shadow)' }}
                     >
                         {/* Decorative Background Accent */}
-                        <div className={`absolute -right-10 -top-10 w-24 h-24 rounded-full opacity-5 blur-2xl ${isPositive ? 'bg-red-500' : 'bg-blue-500'}`} />
+                        <div className={`absolute -right-10 -top-10 w-24 h-24 rounded-full opacity-5 blur-2xl ${item.quantity === 0 ? 'bg-gray-400' : (isPositive ? 'bg-red-500' : 'bg-blue-500')}`} />
 
                         {/* Header: Name & Yield */}
                         <div className="flex justify-between items-center mb-3">
@@ -77,7 +77,7 @@ export default function StockTable({ data, onRowClick }: StockTableProps) {
                             <div className="flex flex-col items-end">
                                 <Text type="secondary" style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8' }}>평가손익</Text>
                                 <Text className="font-numeric" style={{ fontSize: 13, fontWeight: 800, color: isPositive ? '#ef4444' : '#3b82f6' }}>
-                                    {isPositive ? '+' : ''}{item.PnL.toLocaleString()}원
+                                    {isPositive ? '+' : ''}{Math.round(item.PnL).toLocaleString()}원
                                 </Text>
                             </div>
                         </div>
@@ -100,10 +100,10 @@ export default function StockTable({ data, onRowClick }: StockTableProps) {
                                 <div className="flex justify-between items-baseline">
                                     <Text className="font-numeric" style={{ fontSize: 14, fontWeight: 800, color: 'var(--foreground)' }}>{item.currentPrice.toLocaleString()}<small className="ml-0.5 opacity-50 font-normal text-[9px]">원</small></Text>
                                     <div className="flex items-center gap-1.5 bg-slate-100/30 dark:bg-white/10 px-2 py-0.5 rounded-md">
-                                        <Text className="font-numeric" style={{ fontSize: 10, fontWeight: 800, color: item.changeRate >= 0 ? '#ef4444' : '#3b82f6' }}>
-                                            {item.changeRate >= 0 ? '▲' : '▼'}{(item.currentPrice * Math.abs(item.changeRate / 100) / (1 + (item.changeRate / 100))).toFixed(0).toLocaleString()}
+                                        <Text className="font-numeric" style={{ fontSize: 10, fontWeight: 800, color: item.changeRate > 0 ? '#ef4444' : item.changeRate < 0 ? '#3b82f6' : '#94a3b8' }}>
+                                            {item.changeRate > 0 ? '▲' : item.changeRate < 0 ? '▼' : ''}{(item.currentPrice * Math.abs(item.changeRate / 100) / (1 + (item.changeRate / 100))).toFixed(0).toLocaleString()}
                                         </Text>
-                                        <Text className="font-numeric" style={{ fontSize: 10, fontWeight: 800, color: item.changeRate >= 0 ? '#ef4444' : '#3b82f6' }}>
+                                        <Text className="font-numeric" style={{ fontSize: 10, fontWeight: 800, color: item.changeRate > 0 ? '#ef4444' : item.changeRate < 0 ? '#3b82f6' : '#94a3b8' }}>
                                             ({item.changeRate > 0 ? '+' : ''}{item.changeRate.toFixed(2)}%)
                                         </Text>
                                     </div>

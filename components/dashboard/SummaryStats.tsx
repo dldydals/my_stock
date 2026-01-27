@@ -9,28 +9,47 @@ const { Text } = Typography;
 interface SummaryStatsProps {
     totalAssets: number;
     todayPnL: number;
-    expectedDividends: number;
+    totalBuyAmount: number;
     cashDeposit: number;
     cashCma: number;
-    onUpdateCash: (data: { deposit: number; cma: number }) => Promise<void>;
+    totalCumulativeDeposit: number;
+    totalCumulativeWithdrawal: number;
+    onUpdateCash: (data: { deposit?: number; cma?: number; totalDeposit?: number; totalWithdrawal?: number }) => Promise<void>;
 }
 
-export default function SummaryStats({ totalAssets, todayPnL, expectedDividends, cashDeposit, cashCma, onUpdateCash }: SummaryStatsProps) {
+export default function SummaryStats({
+    totalAssets,
+    todayPnL,
+    totalBuyAmount,
+    cashDeposit,
+    cashCma,
+    totalCumulativeDeposit,
+    totalCumulativeWithdrawal,
+    onUpdateCash
+}: SummaryStatsProps) {
     const [isEditing, setIsEditing] = useState(false);
     const [editDeposit, setEditDeposit] = useState(cashDeposit);
     const [editCma, setEditCma] = useState(cashCma);
+    const [editTotalDeposit, setEditTotalDeposit] = useState(totalCumulativeDeposit);
+    const [editTotalWithdrawal, setEditTotalWithdrawal] = useState(totalCumulativeWithdrawal);
     const [loading, setLoading] = useState(false);
 
     useEffect(() => {
         setEditDeposit(cashDeposit);
         setEditCma(cashCma);
-    }, [cashDeposit, cashCma]);
+        setEditTotalDeposit(totalCumulativeDeposit);
+        setEditTotalWithdrawal(totalCumulativeWithdrawal);
+    }, [cashDeposit, cashCma, totalCumulativeDeposit, totalCumulativeWithdrawal]);
 
     const handleSave = async () => {
         setLoading(true);
         try {
-            await onUpdateCash({ deposit: editDeposit, cma: editCma });
-            // Immediately close editing mode after a successful call
+            await onUpdateCash({
+                deposit: editDeposit,
+                cma: editCma,
+                totalDeposit: editTotalDeposit,
+                totalWithdrawal: editTotalWithdrawal
+            });
             setIsEditing(false);
         } catch (e) {
             console.error("Failed to save cash:", e);
@@ -44,143 +63,205 @@ export default function SummaryStats({ totalAssets, todayPnL, expectedDividends,
     return (
         <Card
             size="small"
-            className="mb-6 glass-card overflow-hidden transition-all duration-300 hover:shadow-lg"
+            className="glass-card overflow-hidden transition-all duration-300 hover:shadow-lg"
             styles={{
-                header: { borderBottom: '1px solid rgba(0,0,0,0.05)', minHeight: 40 },
-                body: { padding: '24px' }
+                header: { borderBottom: '1px solid rgba(255,255,255,0.05)', minHeight: 48, background: 'rgba(255,255,255,0.02)' },
+                body: { padding: '28px' }
             }}
             title={
-                <Space size={8} direction="horizontal">
-                    <div className="w-1.5 h-4 bg-blue-500 rounded-full shadow-[0_0_8px_rgba(59,130,246,0.5)]" />
-                    <span className="text-sm font-bold opacity-80" style={{ color: 'var(--foreground)' }}>핵심 지표 (Key Metrics)</span>
-                </Space>
+                <div className="flex justify-between items-center w-full">
+                    <Space size={10} orientation="horizontal">
+                        <div className="w-1.5 h-5 bg-blue-500 rounded-full shadow-[0_0_12px_rgba(59,130,246,0.6)]" />
+                        <span className="text-sm font-extrabold tracking-tight" style={{ color: 'var(--foreground)', opacity: 0.9 }}>핵심 포트폴리오 지표</span>
+                    </Space>
+                    {isEditing ? (
+                        <Space size={8}>
+                            <Button
+                                type="primary"
+                                size="small"
+                                onClick={handleSave}
+                                loading={loading}
+                                icon={<CheckOutlined style={{ fontSize: 12 }} />}
+                                style={{ borderRadius: 8, height: 28, background: '#10b981', borderColor: '#10b981' }}
+                            >
+                                저장
+                            </Button>
+                            <Button
+                                size="small"
+                                onClick={() => setIsEditing(false)}
+                                icon={<CloseOutlined style={{ fontSize: 12 }} />}
+                                style={{ borderRadius: 8, height: 28 }}
+                            >
+                                취소
+                            </Button>
+                        </Space>
+                    ) : (
+                        <Button
+                            type="text"
+                            size="small"
+                            icon={<EditOutlined style={{ color: '#3b82f6' }} />}
+                            onClick={() => setIsEditing(true)}
+                            className="hover:bg-blue-500/10"
+                            style={{ borderRadius: 8, height: 28, fontWeight: 700, color: '#3b82f6' }}
+                        >
+                            금액 수정
+                        </Button>
+                    )}
+                </div>
             }
         >
-            <div>
-                <Row gutter={[24, 24]}>
-                    <Col span={24}>
-                        <Statistic
-                            title={<Text type="secondary" style={{ fontSize: 13, fontWeight: 500 }}>총 투자 평가자산 (예수금 포함)</Text>}
-                            value={totalAssets + cashDeposit}
-                            precision={0}
-                            suffix={<span style={{ fontSize: 16, marginLeft: 4, fontWeight: 500 }}>원</span>}
-                            styles={{ content: { fontSize: 36, fontWeight: 800, color: 'var(--foreground)', letterSpacing: '-1.5px', fontFamily: '"JetBrains Mono", monospace' } }}
-                        />
-                    </Col>
-
-                    <Col xs={12} sm={8}>
-                        <Statistic
-                            title={
-                                <Space size={4} direction="horizontal">
-                                    <Text type="secondary" style={{ fontSize: 12 }}>총 평가손익</Text>
-                                    <Tooltip title="보유 종목의 총 합계 수익">
-                                        <InfoCircleOutlined style={{ color: '#94a3b8', fontSize: 11 }} />
-                                    </Tooltip>
-                                </Space>
-                            }
-                            value={Math.abs(todayPnL)}
-                            precision={0}
-                            styles={{
-                                content: {
-                                    color: isPnLPositive ? '#ef4444' : '#3b82f6',
-                                    fontSize: 20,
-                                    fontWeight: 800,
-                                    fontFamily: '"JetBrains Mono", monospace'
-                                }
-                            }}
-                            prefix={isPnLPositive ? <ArrowUpOutlined /> : <ArrowDownOutlined />}
-                        />
-                    </Col>
-
-                    {expectedDividends > 0 && (
-                        <Col xs={12} sm={8}>
-                            <Statistic
-                                title={
-                                    <Space size={4} direction="horizontal">
-                                        <Text type="secondary" style={{ fontSize: 12 }}>예상 배당금 (연)</Text>
-                                        <Tooltip title="보유 종목의 시가 배당률(KRX 기준)을 반영한 세전 예상 수령액입니다.">
-                                            <InfoCircleOutlined style={{ color: '#94a3b8', fontSize: 11 }} />
-                                        </Tooltip>
-                                    </Space>
-                                }
-                                value={expectedDividends}
-                                precision={0}
-                                styles={{ content: { fontSize: 20, fontWeight: 800, color: 'var(--foreground)', opacity: 0.8, fontFamily: '"JetBrains Mono", monospace' } }}
-                            />
-                        </Col>
-                    )}
-                </Row>
-
-                <Divider style={{ margin: '16px 0', opacity: 0.1 }} />
-
+            <div className="flex flex-col gap-6">
+                {/* Total Assets - Hero Metric */}
                 <div className="relative">
-                    <Row gutter={16} align="middle">
-                        <Col span={10}>
-                            <div className="flex flex-col">
-                                <Text type="secondary" style={{ fontSize: 11, marginBottom: 2 }}>예수금</Text>
-                                {isEditing ? (
-                                    <InputNumber
-                                        size="small"
-                                        style={{ width: '100%' }}
-                                        value={editDeposit}
-                                        onChange={(val) => setEditDeposit(val || 0)}
-                                        formatter={(val) => `${val}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
-                                    />
-                                ) : (
-                                    <Text className="font-numeric" strong style={{ fontSize: 16, color: 'var(--foreground)' }}>{cashDeposit.toLocaleString()}<small className="ml-1 font-normal opacity-50 text-[10px]">원</small></Text>
-                                )}
+                    <Row gutter={24} align="bottom">
+                        <Col span={14}>
+                            <Statistic
+                                title={<Text type="secondary" style={{ fontSize: 13, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.5px' }}>총 투자 평가자산 (Stock + Cash)</Text>}
+                                value={totalAssets + cashDeposit + cashCma}
+                                precision={0}
+                                suffix={<span style={{ fontSize: 14, marginLeft: 4, fontWeight: 600, opacity: 0.5 }}>KRW</span>}
+                                styles={{
+                                    content: {
+                                        fontSize: 38, // Slightly reduced from 42 to give more space
+                                        fontWeight: 900,
+                                        color: 'var(--foreground)',
+                                        letterSpacing: '-2px',
+                                        fontFamily: '"Inter", sans-serif'
+                                    }
+                                }}
+                            />
+                            <div className="flex gap-4 mt-1">
+                                <Text type="secondary" style={{ fontSize: 12 }}>
+                                    상장 주식: <Text strong style={{ color: 'var(--foreground)' }}>{totalAssets.toLocaleString()}</Text>원
+                                </Text>
+                                <Text type="secondary" style={{ fontSize: 12 }}>
+                                    총 현금: <Text strong style={{ color: 'var(--foreground)' }}>{(cashDeposit + cashCma).toLocaleString()}</Text>원
+                                </Text>
                             </div>
                         </Col>
-                        <Col span={10}>
-                            <div className="flex flex-col">
-                                <Text type="secondary" style={{ fontSize: 11, marginBottom: 2 }}>CMA</Text>
-                                {isEditing ? (
-                                    <InputNumber
-                                        size="small"
-                                        className="font-numeric"
-                                        style={{ width: '100%' }}
-                                        value={editCma}
-                                        onChange={(val) => setEditCma(val || 0)}
-                                        formatter={(val) => `${val}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
-                                    />
-                                ) : (
-                                    <Text className="font-numeric" strong style={{ fontSize: 16, color: 'var(--foreground)' }}>{cashCma.toLocaleString()}<small className="ml-1 font-normal opacity-50 text-[10px]">원</small></Text>
-                                )}
+                        <Col span={10} className="text-right">
+                            <div className={`${isPnLPositive ? 'bg-red-500/5 border-red-500/10' : 'bg-blue-500/5 border-blue-500/10'} p-4 rounded-2xl border inline-block text-left w-full`}>
+                                <Text type="secondary" style={{ fontSize: 10, fontWeight: 700, display: 'block', color: isPnLPositive ? '#ef4444' : '#3b82f6' }}>총 평가손익 (P/L)</Text>
+                                <div className="flex items-baseline gap-1">
+                                    {isPnLPositive ? <ArrowUpOutlined style={{ fontSize: 14, color: '#ef4444' }} /> : <ArrowDownOutlined style={{ fontSize: 14, color: '#3b82f6' }} />}
+                                    <Text strong style={{ fontSize: 18, color: isPnLPositive ? '#ef4444' : '#3b82f6', letterSpacing: '-0.5px', whiteSpace: 'nowrap' }}>
+                                        {Math.round(Math.abs(todayPnL)).toLocaleString()}
+                                        <small className="ml-1 text-[10px] opacity-60">원</small>
+                                    </Text>
+                                </div>
                             </div>
-                        </Col>
-                        <Col span={4} className="flex justify-end">
-                            {isEditing ? (
-                                <Space size={4} direction="horizontal">
-                                    <Button
-                                        type="primary"
-                                        size="small"
-                                        icon={<CheckOutlined style={{ fontSize: 10 }} />}
-                                        onClick={handleSave}
-                                        loading={loading}
-                                        style={{ borderRadius: 4, width: 24, padding: 0 }}
-                                    />
-                                    <Button
-                                        size="small"
-                                        icon={<CloseOutlined style={{ fontSize: 10 }} />}
-                                        onClick={() => setIsEditing(false)}
-                                        style={{ borderRadius: 4, width: 24, padding: 0 }}
-                                    />
-                                </Space>
-                            ) : (
-                                <Button
-                                    type="text"
-                                    size="small"
-                                    icon={<EditOutlined style={{ color: '#3b82f6' }} />}
-                                    onClick={() => setIsEditing(true)}
-                                    className="hover:bg-blue-500/10"
-                                    style={{ borderRadius: 6, fontWeight: 700 }}
-                                >
-                                    <span style={{ fontSize: 12, color: '#3b82f6' }}>수정</span>
-                                </Button>
-                            )}
                         </Col>
                     </Row>
                 </div>
+
+                {/* <Divider style={{ margin: 0, opacity: 0.05 }} /> */}
+
+                {/* Grid for other metrics */}
+                <Row gutter={[24, 24]}>
+
+                    <Col span={24}>
+                        <div className="bg-slate-500/5 p-3 rounded-2xl border border-slate-500/10">
+                            <div className="flex items-center justify-between gap-1">
+                                {/* Deposit Part */}
+                                <div className="flex-1 min-w-[110px]">
+                                    <Text type="secondary" style={{ fontSize: 9, fontWeight: 700, display: 'block' }}>누적 입금</Text>
+                                    {isEditing ? (
+                                        <InputNumber
+                                            size="small"
+                                            style={{ width: '100%' }}
+                                            value={editTotalDeposit}
+                                            onChange={(val) => setEditTotalDeposit(val || 0)}
+                                            formatter={(val) => `${val}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+                                            className="premium-input-small"
+                                        />
+                                    ) : (
+                                        <Text strong style={{ fontSize: 13, color: 'var(--foreground)' }}>
+                                            {Math.round(totalCumulativeDeposit).toLocaleString()}<small className="ml-0.5 opacity-40 text-[9px]">원</small>
+                                        </Text>
+                                    )}
+                                </div>
+
+                                <div className="px-1 opacity-40">
+                                    <Text style={{ fontSize: 16, fontWeight: 100 }}>-</Text>
+                                </div>
+
+                                {/* Withdrawal Part */}
+                                <div className="flex-1 min-w-[110px]">
+                                    <Text type="secondary" style={{ fontSize: 9, fontWeight: 700, display: 'block' }}>누적 출금</Text>
+                                    {isEditing ? (
+                                        <InputNumber
+                                            size="small"
+                                            style={{ width: '100%' }}
+                                            value={editTotalWithdrawal}
+                                            onChange={(val) => setEditTotalWithdrawal(val || 0)}
+                                            formatter={(val) => `${val}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+                                            className="premium-input-small"
+                                        />
+                                    ) : (
+                                        <Text strong style={{ fontSize: 13, color: 'var(--foreground)' }}>
+                                            {Math.round(totalCumulativeWithdrawal).toLocaleString()}<small className="ml-0.5 opacity-40 text-[9px]">원</small>
+                                        </Text>
+                                    )}
+                                </div>
+
+                                <div className="px-1 opacity-40">
+                                    <Text style={{ fontSize: 16, fontWeight: 100 }}>=</Text>
+                                </div>
+
+                                {/* Net Part */}
+                                <div className="flex-1 min-w-[110px] text-right">
+                                    <Text type="secondary" style={{ fontSize: 9, fontWeight: 700, display: 'block', color: '#3b82f6' }}>순 투자 원금</Text>
+                                    <Text strong style={{ fontSize: 16, color: '#3b82f6', letterSpacing: '-0.5px' }}>
+                                        {Math.round(totalCumulativeDeposit - totalCumulativeWithdrawal).toLocaleString()}
+                                        <small className="ml-0.5 text-[9px] opacity-60">원</small>
+                                    </Text>
+                                </div>
+                            </div>
+                        </div>
+                    </Col>
+
+                    <Col span={12}>
+                        <div className="flex flex-col gap-1">
+                            <Text type="secondary" style={{ fontSize: 12, fontWeight: 600 }}>예수금 (Deposit)</Text>
+                            {isEditing ? (
+                                <InputNumber
+                                    size="middle"
+                                    style={{ width: '100%' }}
+                                    value={editDeposit}
+                                    onChange={(val) => setEditDeposit(val || 0)}
+                                    formatter={(val) => `${val}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+                                    className="premium-input"
+                                />
+                            ) : (
+                                <Text strong style={{ fontSize: 20, color: 'var(--foreground)' }}>
+                                    {Math.round(cashDeposit).toLocaleString()}
+                                    <small className="ml-1 opacity-40 font-normal text-xs text-secondary">원</small>
+                                </Text>
+                            )}
+                        </div>
+                    </Col>
+
+                    <Col span={12}>
+                        <div className="flex flex-col gap-1">
+                            <Text type="secondary" style={{ fontSize: 12, fontWeight: 600 }}>CMA / 파킹통장</Text>
+                            {isEditing ? (
+                                <InputNumber
+                                    size="middle"
+                                    style={{ width: '100%' }}
+                                    value={editCma}
+                                    onChange={(val) => setEditCma(val || 0)}
+                                    formatter={(val) => `${val}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+                                    className="premium-input"
+                                />
+                            ) : (
+                                <Text strong style={{ fontSize: 20, color: 'var(--foreground)' }}>
+                                    {Math.round(cashCma).toLocaleString()}
+                                    <small className="ml-1 opacity-40 font-normal text-xs text-secondary">원</small>
+                                </Text>
+                            )}
+                        </div>
+                    </Col>
+                </Row>
             </div>
         </Card>
     );
