@@ -31,6 +31,7 @@ cd my-stock
 
 ```env
 DATABASE_URL="postgresql://사용자명:비밀번호@localhost:5432/데이터베이스명?schema=public"
+GOOGLE_API_KEY="[GOOGLE_API_KEY]"
 ```
 
 ### 3. 프론트엔드 설치 및 DB 셋업

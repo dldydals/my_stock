@@ -82,14 +82,15 @@ export default function StockTable({ data, onRowClick, aiReport }: StockTablePro
                         {/* ■■■■■■■■■■ HEADER: 종목정보 & AI 가격 분석 ■■■■■■■■■■ */}
                         {/* ■■■■■■■■■■ HEADER: 3등분 (가운데 칸 우측 정렬 적용) ■■■■■■■■■■ */}
                         <div className="p-4 relative z-10" style={headerHeatmapStyle}>
-                            <div className="grid grid-cols-3 gap-2 items-center">
+                            {/* 1fr(나머지 다) / auto(글자만큼) / auto(글자만큼) + gap-4(간격조절) */}
+                            <div className="grid grid-cols-[1fr_auto_auto] gap-4 items-center">
                                 
                                 {/* 1. 좌측 (Left): 종목명 / 티커 / AI 배지 */}
                                 <div className="flex flex-col items-start gap-0.5 overflow-hidden">
                                     <Text strong style={{
                                         fontSize: 16, color: 'var(--foreground)', letterSpacing: '-0.5px',
                                         whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-                                        maxWidth: '100%', lineHeight: 1.2
+                                        maxWidth: '100%', lineHeight: 1.2, marginBottom: 10
                                     }}>
                                         {item.name}
                                     </Text>
@@ -115,7 +116,7 @@ export default function StockTable({ data, onRowClick, aiReport }: StockTablePro
                                 {/* items-center를 items-end로 변경하여 오른쪽으로 붙임 */}
                                 <div className="flex flex-col items-end justify-center pr-2 border-r border-white/10"> 
                                     {/* 현재가 */}
-                                    <Text className="font-numeric" style={{ fontSize: 20, fontWeight: 800, color: 'var(--foreground)', lineHeight: 1 }}>
+                                    <Text className="font-numeric" style={{ fontSize: 20, fontWeight: 800, color: 'var(--foreground)', lineHeight: 1, marginBottom: 8 }}>
                                         {item.currentPrice.toLocaleString()}
                                     </Text>
                                     
@@ -168,13 +169,13 @@ export default function StockTable({ data, onRowClick, aiReport }: StockTablePro
                                 </div>
                                 {/* 수익률 및 평가손익 */}
                                 <div className="flex flex-col items-end">
-                                    <Text type="secondary" style={{ fontSize: 10, fontWeight: 700, color: '#e2e8f0' }}>수익률 (손익)</Text>
+                                    <Text type="secondary" style={{ fontSize: 10, fontWeight: 700, color: '#e2e8f0' }}>수익 (손익률)</Text>
                                     <div className="flex items-center gap-1.5">
-                                        <Text className="font-numeric" style={{ fontSize: 13, fontWeight: 800, color: item.yield > 0 ? '#fca5a5' : '#93c5fd' }}>
-                                            {item.yield > 0 ? '+' : ''}{item.yield.toFixed(2)}%
+                                        <Text className="font-numeric" style={{ fontSize: 16, fontWeight: 800, color: item.yield > 0 ? '#fca5a5' : '#93c5fd' }}>
+                                            {item.yield > 0 ? '+' : ''} {Math.round(item.PnL).toLocaleString()}
                                         </Text>
                                         <Text className="font-numeric" style={{ fontSize: 11, fontWeight: 600, color: item.yield > 0 ? '#fca5a5' : '#93c5fd', opacity: 0.8 }}>
-                                            ({item.yield > 0 ? '+' : ''}{Math.round(item.PnL).toLocaleString()})
+                                            ({item.yield > 0 ? '+' : ''}{item.yield.toFixed(2)}%)
                                         </Text>
                                     </div>
                                 </div>
