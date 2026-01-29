@@ -135,7 +135,7 @@ export default function StockTable({ data, onRowClick, aiReport }: StockTablePro
                                 <div className="flex flex-col items-end gap-1">
                                     {/* 매수추천가 */}
                                     <div className="flex flex-col items-end">
-                                        <Text style={{ fontSize: 9, fontWeight: 600, color: '#93c5fd', lineHeight: 1 }}>매수추천</Text>
+                                        <Text style={{ fontSize: 9, fontWeight: 600, color: '#93c5fd', lineHeight: 1 }}>단기 매수가</Text>
                                         <Text className="font-numeric" style={{ fontSize: 13, fontWeight: 700, color: '#e2e8f0' }}>
                                             {(analysis?.buy_price || 0) > 0 ? (analysis?.buy_price || 0).toLocaleString() : '-'}
                                         </Text>
@@ -143,7 +143,7 @@ export default function StockTable({ data, onRowClick, aiReport }: StockTablePro
 
                                     {/* 목표가 (매도추천) */}
                                     <div className="flex flex-col items-end">
-                                        <Text style={{ fontSize: 9, fontWeight: 600, color: '#fca5a5', lineHeight: 1 }}>목표가</Text>
+                                        <Text style={{ fontSize: 9, fontWeight: 600, color: '#fca5a5', lineHeight: 1 }}>단기 매도가</Text>
                                         <Text className="font-numeric" style={{ fontSize: 13, fontWeight: 700, color: '#e2e8f0' }}>
                                             {(analysis?.target_price || 0) > 0 ? (analysis?.target_price || 0).toLocaleString() : '-'}
                                         </Text>
