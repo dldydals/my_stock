@@ -8,8 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "python-api": "run-script-os",
-    "python-api:linux": "cd python && python3 -m uvicorn stock_api:app --reload --port 8000",
-    "python-api:win32": "cd python && python -m uvicorn stock_api:app --reload --port 8000",
+    "python-api:linux": "cd python && ../../.venv/bin/python -m uvicorn stock_api:app --reload --port 8000",
+    "python-api:win32": "cd python && venv\\Scripts\\python -m uvicorn stock_api:app --reload --port 8000",
     "mystock": "concurrently --kill-others \"npm run python-api\" \"npm run dev\"",
     "db:migrate-data": "tsx scripts/migrate.ts"
   },
@@ -25,7 +25,9 @@
     "next": "16.1.1",
     "react": "19.2.3",
     "react-dom": "19.2.3",
-    "recharts": "^3.6.0"
+    "react-markdown": "^10.1.0",
+    "recharts": "^3.6.0",
+    "remark-gfm": "^4.0.1"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

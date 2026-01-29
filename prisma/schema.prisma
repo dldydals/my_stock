@@ -58,3 +58,21 @@ enum TransactionType {
   BUY
   SELL
 }
+
+model DailyReport {
+  id        Int      @id @default(autoincrement())
+  date      DateTime @unique @default(now())
+  content   Json
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("daily_reports")
+}
+
+model Watchlist {
+  id        Int      @id @default(autoincrement())
+  ticker    String   @unique
+  name      String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("watchlist")
+}

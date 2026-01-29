@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { Row, Col, Divider, Typography, Breadcrumb, Space, Button, Card, Modal, Form, Input, InputNumber, DatePicker, message } from 'antd';
+import { Row, Col, Divider, Typography, Breadcrumb, Space, Button, Card, Modal, Form, Input, InputNumber, DatePicker, App } from 'antd';
 import { ReloadOutlined, DatabaseOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import SummaryStats from '../components/dashboard/SummaryStats';
@@ -9,10 +9,13 @@ import AssetPieChart from '../components/dashboard/AssetPieChart';
 import StockTable from '../components/dashboard/StockTable';
 import TransactionDrawer from '../components/dashboard/TransactionDrawer';
 import PortfolioInsights from '../components/dashboard/PortfolioInsights';
+import AIReportCard from '../components/dashboard/AIReportCard';
+import WatchlistSection from '../components/dashboard/WatchlistSection';
 
 const { Title, Text } = Typography;
 
 export default function Home() {
+  const { message } = App.useApp();
   const [loading, setLoading] = useState(true);
   const [holdings, setHoldings] = useState<any[]>([]);
   const [balances, setBalances] = useState<any[]>([]);
@@ -23,6 +26,10 @@ export default function Home() {
   const [lastSyncTime, setLastSyncTime] = useState<string>("");
   const [newStockModalOpen, setNewStockModalOpen] = useState(false);
   const [newStockForm] = Form.useForm();
+
+  // AI Analyst State
+  const [aiReport, setAiReport] = useState<any>(null);
+  const [aiLoading, setAiLoading] = useState(false);
 
   const fetchData = async () => {
     setLoading(true);
@@ -55,8 +62,50 @@ export default function Home() {
     }
   };
 
+  const fetchAIReport = async () => {
+    try {
+      const res = await fetch('http://localhost:8000/ai/latest');
+      const data = await res.json();
+      if (!data.message) { // "No reports found" check
+        setAiReport(data);
+      }
+    } catch (e) {
+      console.error("AI report fetch failed", e);
+    }
+  };
+
+  // AI 분석 트리거
+  const triggerAIAnalysis = async () => {
+    setAiLoading(true);
+    try {
+      // Fetch the latest watchlist from DB
+      const wlRes = await fetch('/api/watchlist');
+      const wlData = await wlRes.json();
+      const watchlist = wlData.map((w: any) => ({ name: w.name, ticker: w.ticker }));
+
+      const response = await fetch('http://localhost:8000/ai/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          holdings: holdings.map(h => ({ name: h.name, code: h.ticker })),
+          watchlist: watchlist.map((w: any) => ({ name: w.name, code: w.ticker }))
+        }),
+      });
+      const result = await response.json();
+      if (result.error) throw new Error(result.error);
+      setAiReport(result);
+      message.success('새로운 AI 분석 리포트가 생성되었습니다.');
+    } catch (error) {
+      console.error('AI Analysis failed:', error);
+      message.error('AI 분석 생성에 실패했습니다.');
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
   useEffect(() => {
     fetchData();
+    fetchAIReport();
     // 10초마다 자동 갱신
     const interval = setInterval(fetchData, 10000);
     return () => clearInterval(interval);
@@ -224,7 +273,7 @@ export default function Home() {
 
       <Row gutter={[24, 24]}>
         {/* Left Section: Stats and Chart */}
-        <Col xs={24} lg={9}>
+        <Col xs={24} lg={7}>
           <Space orientation="vertical" size={32} style={{ width: '100%' }}>
             <SummaryStats
               totalAssets={totalAssetsValue}
@@ -236,6 +285,13 @@ export default function Home() {
               totalCumulativeWithdrawal={totalWithdrawal}
               onUpdateCash={handleCashUpdate}
             />
+
+            <AIReportCard
+              data={aiReport}
+              loading={aiLoading}
+              onRefresh={triggerAIAnalysis}
+            />
+
             <Card
               className="shadow-sm border-slate-100 dark:border-slate-800 overflow-hidden"
               styles={{
@@ -265,7 +321,7 @@ export default function Home() {
         </Col>
 
         {/* Right Section: Main Table Area turned into Card Grid Area */}
-        <Col xs={24} lg={15}>
+        <Col xs={24} lg={17}>
           <div className="flex justify-between items-center mb-6 pl-2">
             <Space size={12}>
               <div className="w-2 h-6 bg-blue-500 rounded-full shadow-[0_0_12px_rgba(59,130,246,0.5)]" />
@@ -279,7 +335,12 @@ export default function Home() {
           <StockTable
             data={holdings}
             onRowClick={handleRowClick}
+            aiReport={aiReport}
           />
+
+          <Divider style={{ margin: '40px 0' }} />
+
+          <WatchlistSection aiReport={aiReport} />
         </Col>
       </Row>
 

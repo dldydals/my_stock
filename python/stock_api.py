@@ -1,11 +1,37 @@
 # stock_api.py
+import os
+import json
+import psycopg2
+from psycopg2.extras import Json
 from fastapi import FastAPI, HTTPException
-from fastapi.middleware.cors import CORSMiddleware # 👈 필수 모듈
+from fastapi.middleware.cors import CORSMiddleware
 from pykrx import stock
-from datetime import datetime, timedelta
 import pandas as pd
+import yfinance as yf
+from datetime import datetime, timedelta
+import datetime as dt_module # Renaming to avoid confusion with datetime class
+from dotenv import load_dotenv
+
+# Load environment variables (DATABASE_URL, GOOGLE_API_KEY)
+load_dotenv()
+
+from ai_analyst import AIAnalyst
 
 app = FastAPI()
+ai_analyst = AIAnalyst()
+
+# Database Connection Helper
+def get_db_connection():
+    db_url = os.environ.get("DATABASE_URL")
+    if not db_url:
+        raise Exception("DATABASE_URL not found in environment")
+    
+    # Handle the case where Prisma style URL needs adjustment for psycopg2
+    # Strip query parameters like ?schema=public which psycopg2 might not like
+    if "?" in db_url:
+        db_url = db_url.split("?")[0]
+        
+    return psycopg2.connect(db_url)
 
 # ==========================================
 # 👇 CORS 설정 (이 부분이 핵심입니다!)
@@ -67,7 +93,7 @@ def get_latest_trading_data(ticker: str, days_to_look_back: int = 7):
 # [Heavy] 상세 정보 (최초 로딩, 날짜 변경 시 호출)
 # stock_api.py 수정
 
-def get_valid_fundamental(ticker: str, retries=10):
+def get_valid_fundamental(ticker: str, retries=5): # Reduced retries to speed up
     """
     오늘 날짜부터 과거로 거슬러 올라가며 
     데이터가 존재하는 가장 최근 날짜의 펀더멘털을 찾습니다.
@@ -75,6 +101,7 @@ def get_valid_fundamental(ticker: str, retries=10):
     for i in range(retries):
         target_date = (datetime.now() - timedelta(days=i)).strftime("%Y%m%d")
         try:
+            # Adding a small timeout logic is hard with pykrx, but we can at least reduce retries
             df = stock.get_market_fundamental_by_ticker(date=target_date, market="ALL")
             if not df.empty and ticker in df.index:
                 row = df.loc[ticker]
@@ -82,7 +109,7 @@ def get_valid_fundamental(ticker: str, retries=10):
                 if row['PBR'] > 0 or row['DIV'] > 0:
                     print(f"Found fundamental data for {ticker} on {target_date}")
                     return row
-        except Exception as e:
+        except Exception:
             continue
     return None
 
@@ -151,10 +178,17 @@ def get_stock_price(ticker: str):
         
         last_price = df_price.iloc[-1]
         
+        # Calculate change amount if possible
+        change_amount = 0
+        if len(df_price) > 1:
+            prev_close = df_price['종가'].iloc[-2]
+            change_amount = int(last_price['종가'] - prev_close)
+        
         return {
             "ticker": ticker,
             "price": int(last_price['종가']),
-            "change_rate": float(last_price['등락률'])
+            "change_rate": float(last_price['등락률']),
+            "change_amount": change_amount
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -277,14 +311,75 @@ def batch_strategy_analysis(payload: TickerList):
         results[ticker] = analyze_ticker(ticker)
     return results
 
+# ==========================================
+# 🤖 AI Analyst (Gemini) Endpoints
+# ==========================================
 
-@app.post("/strategy/batch")
-def batch_strategy_analysis(payload: TickerList):
-    results = {}
-    print(f"Batch Analysis Request: {payload.tickers}")
-    for ticker in payload.tickers:
-        results[ticker] = analyze_ticker(ticker)
-    return results
+class StockInfo(BaseModel):
+    name: str
+    code: str
+
+class AIAnalysisRequest(BaseModel):
+    holdings: List[StockInfo]
+    watchlist: List[StockInfo]
+
+@app.post("/ai/analyze")
+def trigger_ai_analysis(payload: AIAnalysisRequest):
+    """Trigger a new AI analysis report and save to DB"""
+    try:
+        # 1. Generate Report
+        # Transform the Pydantic models to dictionaries for the analyst
+        holdings_data = [{"name": h.name, "code": h.code} for h in payload.holdings]
+        watchlist_data = [{"name": h.name, "code": h.code} for h in payload.watchlist]
+        
+        report = ai_analyst.generate_daily_report(holdings_data, watchlist_data)
+        
+        if "error" in report:
+            raise HTTPException(status_code=500, detail=report["error"])
+        
+        # 2. Save to Database (PostgreSQL)
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        today = datetime.now().date()
+        
+        # Upsert report for today
+        cur.execute("""
+            INSERT INTO daily_reports (date, content, created_at)
+            VALUES (%s, %s, NOW())
+            ON CONFLICT (date) DO UPDATE 
+            SET content = EXCLUDED.content, created_at = NOW()
+        """, (today, Json(report)))
+        
+        conn.commit()
+        cur.close()
+        conn.close()
+        
+        return report
+    except Exception as e:
+        print(f"AI Analysis trigger failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/ai/latest")
+def get_latest_ai_report():
+    """Fetch the most recent AI report from DB"""
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        cur.execute("SELECT content FROM daily_reports ORDER BY date DESC LIMIT 1")
+        row = cur.fetchone()
+        
+        cur.close()
+        conn.close()
+        
+        if row:
+            return row[0]
+        else:
+            return {"message": "No reports found"}
+    except Exception as e:
+        print(f"Failed to fetch latest AI report: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 #=====원래 코드 +++
 # @app.get("/price/{ticker}")
@@ -301,5 +396,79 @@ def batch_strategy_analysis(payload: TickerList):
 #     return {"ticker": ticker, "price": current_price}
 
 # 실행: uvicorn stock_api:app --reload --port 8000
+
+# --- Watchlist Management ---
+
+class WatchlistAddRequest(BaseModel):
+    ticker: str
+    name: str
+
+def get_realtime_price(ticker):
+    """Helper to fetch current price for a ticker"""
+    try:
+        stock = yf.Ticker(ticker if not ticker.isdigit() else f"{ticker}.KS")
+        data = stock.history(period="1d")
+        if not data.empty:
+            return round(data['Close'].iloc[-1], 2)
+    except:
+        pass
+    return 0
+
+@app.get("/api/watchlist")
+def get_watchlist():
+    """Get the current watchlist with real-time prices"""
+    conn = get_db_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("SELECT ticker, name FROM watchlist ORDER BY created_at DESC")
+        items = cur.fetchall()
+        
+        result = []
+        for ticker, name in items:
+            price = get_realtime_price(ticker)
+            result.append({
+                "ticker": ticker,
+                "name": name,
+                "price": price
+            })
+        return result
+    finally:
+        cur.close()
+        conn.close()
+
+@app.post("/api/watchlist")
+def add_to_watchlist(payload: WatchlistAddRequest):
+    """Add a stock to the persistent watchlist"""
+    conn = get_db_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute(
+            "INSERT INTO watchlist (ticker, name) VALUES (%s, %s) ON CONFLICT (ticker) DO NOTHING",
+            (payload.ticker, payload.name)
+        )
+        conn.commit()
+        return {"status": "success"}
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        cur.close()
+        conn.close()
+
+@app.delete("/api/watchlist/{ticker}")
+def remove_from_watchlist(ticker: str):
+    """Remove a stock from the persistent watchlist"""
+    conn = get_db_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("DELETE FROM watchlist WHERE ticker = %s", (ticker,))
+        conn.commit()
+        return {"status": "success"}
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        cur.close()
+        conn.close()
 
 

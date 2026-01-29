@@ -4,3 +4,9 @@ pykrx
 pandas
 numpy
 requests
+google-generativeai
+yfinance
+finance-datareader
+beautifulsoup4
+psycopg2-binary
+python-dotenv

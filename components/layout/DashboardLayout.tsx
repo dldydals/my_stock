@@ -1,6 +1,6 @@
 'use client';
 
-import { ConfigProvider, theme, Button } from 'antd';
+import { ConfigProvider, theme, Button, App } from 'antd';
 import { SunOutlined, MoonOutlined } from '@ant-design/icons';
 import StyledComponentsRegistry from '../../lib/AntdRegistry';
 import { useState, useEffect } from 'react';
@@ -66,26 +66,28 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                     }
                 }}
             >
-                <div className="min-h-screen transition-all duration-500 relative bg-background text-foreground">
-                    <div className="fixed top-6 right-8 z-[100]">
-                        <Button
-                            shape="circle"
-                            size="large"
-                            icon={isDarkMode ? <SunOutlined /> : <MoonOutlined />}
-                            onClick={() => setIsDarkMode(!isDarkMode)}
-                            style={{
-                                border: '1px solid rgba(255,255,255,0.1)',
-                                background: isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(15, 23, 42, 0.05)',
-                                color: isDarkMode ? '#fcd34d' : '#1e293b',
-                                backdropFilter: 'blur(12px)',
-                                boxShadow: isDarkMode ? '0 0 20px rgba(59, 130, 246, 0.2)' : '0 4px 12px rgba(0,0,0,0.05)'
-                            }}
-                        />
+                <App>
+                    <div className="min-h-screen transition-all duration-500 relative bg-background text-foreground">
+                        <div className="fixed top-6 right-8 z-[100]">
+                            <Button
+                                shape="circle"
+                                size="large"
+                                icon={isDarkMode ? <SunOutlined /> : <MoonOutlined />}
+                                onClick={() => setIsDarkMode(!isDarkMode)}
+                                style={{
+                                    border: '1px solid rgba(255,255,255,0.1)',
+                                    background: isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(15, 23, 42, 0.05)',
+                                    color: isDarkMode ? '#fcd34d' : '#1e293b',
+                                    backdropFilter: 'blur(12px)',
+                                    boxShadow: isDarkMode ? '0 0 20px rgba(59, 130, 246, 0.2)' : '0 4px 12px rgba(0,0,0,0.05)'
+                                }}
+                            />
+                        </div>
+                        <div className="max-container px-4 py-8 sm:px-6 lg:px-8">
+                            {children}
+                        </div>
                     </div>
-                    <div className="max-container px-4 py-8 sm:px-6 lg:px-8">
-                        {children}
-                    </div>
-                </div>
+                </App>
             </ConfigProvider>
         </StyledComponentsRegistry>
     );

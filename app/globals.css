@@ -1,72 +1,74 @@
 @import "tailwindcss";
-@import "@fontsource/pretendard/index.css";
-@import "@fontsource/jetbrains-mono/index.css";
 
+/* Custom Animations */
+@keyframes blink {
+    0% {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0.4;
+        transform: scale(0.98);
+    }
+
+    100% {
+        opacity: 1;
+    }
+}
+
+@keyframes bounce-subtle {
+
+    0%,
+    100% {
+        transform: translateY(0);
+    }
+
+    50% {
+        transform: translateY(-2px);
+    }
+}
+
+.animate-bounce-subtle {
+    animation: bounce-subtle 3s ease-in-out infinite;
+}
+
+.blink-animation {
+    animation: blink 1s infinite;
+    box-shadow: 0 0 15px rgba(239, 68, 68, 0.4);
+    border: 1px solid rgba(239, 68, 68, 0.5) !important;
+}
+
+/* Glass Scrim for readability on saturated backgrounds */
+.glass-scrim {
+    background: rgba(255, 255, 255, 0.05);
+    backdrop-filter: blur(4px);
+    border-radius: 4px;
+    padding: 2px 4px;
+}
+
+/* Saturated Heatmap Glows */
+.glow-red {
+    box-shadow: 0 0 20px rgba(239, 68, 68, 0.3);
+}
+
+.glow-blue {
+    box-shadow: 0 0 20px rgba(59, 130, 246, 0.3);
+}
+
+/* Custom styles to match the premium dark theme */
 :root {
-  --background: #f8fafc;
-  --foreground: #0f172a;
-  --glass-bg: rgba(255, 255, 255, 0.65);
-  --glass-border: rgba(255, 255, 255, 0.4);
-  --card-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.07);
+    --background: #0f172a;
+    --foreground: #f8fafc;
+    --card-bg: rgba(30, 41, 59, 0.7);
 }
 
-.dark {
-  --background: #020617;
-  --foreground: #f8fafc;
-  --glass-bg: rgba(30, 41, 59, 0.4);
-  --glass-border: rgba(255, 255, 255, 0.08);
-  --card-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.4);
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: "Pretendard", -apple-system, BlinkMacSystemFont, system-ui, Roboto, "Helvetica Neue", "Segoe UI", "Apple SD Gothic Neo", "Malgun Gothic", "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", sans-serif;
-  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-}
-
-@layer base {
-  body {
-    background: radial-gradient(circle at top left, #eff6ff 0%, #ffffff 50%, #f5f3ff 100%);
+body {
     background-color: var(--background);
-    background-attachment: fixed;
     color: var(--foreground);
-    font-family: var(--font-sans);
-    min-height: 100vh;
-    transition: background 0.3s ease, background-color 0.3s ease, color 0.3s ease;
-  }
-
-  .dark body {
-    background: radial-gradient(circle at top right, #0f172a 0%, #020617 100%);
-    background-attachment: fixed;
-  }
 }
 
-@layer components {
-  .glass-card {
-    background: var(--glass-bg);
+.glass-card {
+    background: var(--card-bg) !important;
     backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    border: 1px solid var(--glass-border);
-    box-shadow: var(--card-shadow);
-  }
-
-  .glass-header {
-    background: var(--glass-bg);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
-    border-bottom: 1px solid var(--glass-border);
-  }
-
-  .max-container {
-    max-width: 1440px;
-    margin-left: auto;
-    margin-right: auto;
-    width: 100%;
-  }
-
-  .font-numeric {
-    font-family: var(--font-mono);
-    font-variant-numeric: tabular-nums;
-  }
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
 }
