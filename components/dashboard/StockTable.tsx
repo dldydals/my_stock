@@ -132,23 +132,33 @@ export default function StockTable({ data, onRowClick, aiReport }: StockTablePro
                                     </div>
                                 </div>
 
-                                {/* 3. 우측 (Right): 매수추천가 / 매도(목표)추천가 */}
-                                <div className="flex flex-col items-end gap-1">
-                                    {/* 매수추천가 */}
-                                    <div className="flex flex-col items-end">
-                                        <Text style={{ fontSize: 9, fontWeight: 600, color: '#93c5fd', lineHeight: 1 }}>단기 매수가</Text>
-                                        <Text className="font-numeric" style={{ fontSize: 13, fontWeight: 700, color: '#e2e8f0' }}>
+                               {/* 3. 우측 (Right): 매수 / 매도 / 손절 (가로 배치형) */}
+                                <div className="flex flex-col items-end justify-center gap-0.5"> {/* gap을 줄여서 높이 최소화 */}
+                                    
+                                    {/* (1) 단기 매수가 */}
+                                    <div className="flex items-center justify-end gap-2">
+                                        <Text style={{ fontSize: 10, fontWeight: 600, color: '#93c5fd' }}>단기매수</Text>
+                                        <Text className="font-numeric" style={{ fontSize: 12, fontWeight: 700, color: '#e2e8f0', minWidth: 50, textAlign: 'right' }}>
                                             {(analysis?.buy_price || 0) > 0 ? (analysis?.buy_price || 0).toLocaleString() : '-'}
                                         </Text>
                                     </div>
 
-                                    {/* 목표가 (매도추천) */}
-                                    <div className="flex flex-col items-end">
-                                        <Text style={{ fontSize: 9, fontWeight: 600, color: '#fca5a5', lineHeight: 1 }}>단기 매도가</Text>
-                                        <Text className="font-numeric" style={{ fontSize: 13, fontWeight: 700, color: '#e2e8f0' }}>
+                                    {/* (2) 단기 매도가 */}
+                                    <div className="flex items-center justify-end gap-2">
+                                        <Text style={{ fontSize: 10, fontWeight: 600, color: '#fca5a5' }}>단기매도</Text>
+                                        <Text className="font-numeric" style={{ fontSize: 12, fontWeight: 700, color: '#e2e8f0', minWidth: 50, textAlign: 'right' }}>
                                             {(analysis?.target_price || 0) > 0 ? (analysis?.target_price || 0).toLocaleString() : '-'}
                                         </Text>
                                     </div>
+
+                                    {/* (3) 손절가 (신규 추가) */}
+                                    <div className="flex items-center justify-end gap-2">
+                                        <Text style={{ fontSize: 10, fontWeight: 600, color: '#94a3b8' }}>손절가</Text>
+                                        <Text className="font-numeric" style={{ fontSize: 12, fontWeight: 700, color: '#cbd5e1', minWidth: 50, textAlign: 'right' }}>
+                                            {(analysis?.stop_loss || 0) > 0 ? (analysis?.stop_loss || 0).toLocaleString() : '-'}
+                                        </Text>
+                                    </div>
+
                                 </div>
                             </div>
                         </div>

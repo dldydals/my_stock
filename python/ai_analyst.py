@@ -49,40 +49,47 @@ class AIAnalyst:
             print(f"Data collection failed: {e}")
             return {"error": f"Data collection failed: {str(e)}"}
 
-        # 2. Prepare the AI Prompt
+        # 2. Prepare the AI Prompt (Trading-Focused)
         prompt = f"""
-        당신은 상위 1% 투자 전략을 수립하는 대한민국 최고의 주식 애널리스트이자 '나만의 AI 개인 펀드매니저'입니다.
-        아래 제공되는 실시간 데이터를 철저히 분석하여, 사용자를 위한 '보유 종목 관리' 및 '관심 종목 진입 전략' 리포트를 작성하세요.
+        당신은 대한민국 주식 시장에서 최고의 승률을 자랑하는 **'단기 스윙 트레이더(Swing Trader)'**입니다.
+        가치 투자 관점보다는, **철저한 기술적 분석과 단기 수급**을 기반으로 **3일~2주 내의 단기 매매 차익**을 극대화하는 전략을 제시하세요.
 
-        [3개년 글로벌 시장 지표 (JSON)]
+        [3개년 글로벌 시장 지표]
         {market_data_json}
 
-        [분석 대상 종목 현재가 및 1개월 수익률 (JSON)]
+        [분석 대상 종목 현재가 및 추세]
         {holdings_price_json}
 
-        [분석 대상 종목 최신 뉴스 및 공시 (JSON)]
+        [최신 뉴스 및 재료]
         {news_data_json}
 
-        [보유 현황 (Holdings vs Watchlist)]
-        - 보유 종목 (Holdings): {', '.join([s['name'] for s in holdings_info])}
-        - 관심 종목 (Watchlist): {', '.join([s['name'] for s in watchlist_info])}
+        [포트폴리오 현황]
+        - 보유 중(Holdings): {', '.join([s['name'] for s in holdings_info])}
+        - 관망 중(Watchlist): {', '.join([s['name'] for s in watchlist_info])}
 
-        [분석 가이드라인 - 매우 중요]
-        1. **가격 앵커링 (Current Price Anchoring)**: 제공된 실시간 가격 데이터를 기준으로 삼으세요.
-        2. **보유 종목 전략**: '이익 보존', '비중 조절', '중장기 보유' 등 현재 수익/손실 상황에서의 대응 방안을 제시하세요.
-        3. **관심 종목 전략**: 매수 대기를 지시하거나, 특정 가격 도달 시 '신규 진입' 타점을 정교하게 산출하세요.
-        4. **시장 인사이트**: 글로벌 기술주(AI/반도체) 및 거시 경제 흐름이 해당 종목들에 미칠 영향을 분석하세요.
+        [💥 단기 트레이딩 분석 가이드라인 - 엄격 준수 💥]
+        1. **단기 변동성 활용**: 기업의 장기 가치보다, **지금 당장의 '가격 위치'와 '단기 모멘텀'**에 집중하세요.
+        2. **무조건적인 가격 제시**: 관망이나 홀딩 의견이라도, **"만약 단타로 진입한다면 유효한 기술적 타점"**을 반드시 계산해 내세요. (0원 금지)
+        3. **매수/매도 로직 (Technical Levels)**:
+           - **buy_price (진입/물타기 타점)**: 
+             - 현재 추세에서 **기술적 반등(Rebound)**이 예상되는 **단기 지지선(Support Level)** 혹은 **20일/60일 이평선 눌림목** 가격.
+             - 현재가보다 낮게 설정하여, 주가가 잠시 눌렸을 때 잡을 수 있는 가격.
+           - **target_price (익절 타점)**: 
+             - 단기적으로 부딪힐 수 있는 **1차 저항선(Resistance Level)** 또는 **전고점**.
+             - 욕심내지 말고 실현 가능한 **+3% ~ +10% 구간**의 구체적인 가격.
+           - **stop_loss (손절가)**:
+             - 단기 추세가 무너지는 이탈 가격.
 
-        [출력 형식]
-        반드시 아래의 JSON 형식을 지켜주세요. 텍스트 설명이나 코드 블록 기호 없이 순수 JSON만 출력하세요.
+        [출력 형식 (JSON)]
+        반드시 JSON 형식만 출력하세요. (설명 멘트 금지)
         {{
-          "market_summary": "글로벌 시장 상황 및 수급 인사이트 요약...",
-          "daily_advice": "오늘의 전체적인 투자 행동 지침...",
+          "market_summary": "단기 시장 투심 및 섹터 수급 요약...",
+          "daily_advice": "오늘의 단기 매매(단타/스윙) 대응 전략...",
           "holdings_analysis": [
             {{
               "name": "종목명",
-              "outlook": "호재/악재/중립",
-              "analysis": "보유 종목으로서의 대응 시나리오 및 분석...",
+              "outlook": "단기매수/홀딩/매도 중 택1",
+              "analysis": "단기 차트 및 재료 분석 (수급 주체, 뉴스 반응 등)...",
               "buy_price": 0,
               "target_price": 0,
               "stop_loss": 0
@@ -91,8 +98,8 @@ class AIAnalyst:
           "watchlist_analysis": [
             {{
               "name": "종목명",
-              "outlook": "호재/악재/중립",
-              "analysis": "신규 진입 관점에서의 타점 및 분석...",
+              "outlook": "단기매수/관망/제외 중 택1",
+              "analysis": "신규 진입 시나리오...",
               "buy_price": 0,
               "target_price": 0,
               "stop_loss": 0
