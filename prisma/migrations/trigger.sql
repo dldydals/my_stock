@@ -37,7 +37,7 @@ BEGIN
             WHERE id = NEW.id;
         END IF;
     END IF;
-
+ 
     -- 2. Recalculate Asset Summary (Total Qty & Avg Price based on remaining lots)
     -- Important: Avg Price = Sum of (Remaining Qty * Purchase Price + Pro-rata Buy Fee) / Total Remaining Qty
     SELECT 

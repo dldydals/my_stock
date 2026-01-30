@@ -18,7 +18,7 @@ model Asset {
 
   @@map("assets")
 }
-
+ 
 model Transaction {
   id                  Int             @id @default(autoincrement())
   ticker              String

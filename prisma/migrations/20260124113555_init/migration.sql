@@ -40,3 +40,4 @@ CREATE TABLE "dividends" (
 
 -- CreateIndex
 CREATE UNIQUE INDEX "assets_ticker_key" ON "assets"("ticker");
+ 

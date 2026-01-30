@@ -13,3 +13,4 @@ CREATE TABLE "cash_accounts" (
 
 -- CreateIndex
 CREATE UNIQUE INDEX "cash_accounts_type_key" ON "cash_accounts"("type");
+ 
