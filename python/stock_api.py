@@ -12,6 +12,8 @@ from datetime import datetime, timedelta
 import datetime as dt_module # Renaming to avoid confusion with datetime class
 from dotenv import load_dotenv
 
+
+
 # Load environment variables (DATABASE_URL, GOOGLE_API_KEY)
 load_dotenv()
 

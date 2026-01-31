@@ -9,7 +9,7 @@
     "lint": "eslint",
     "python-api": "run-script-os",
     "python-api:linux": "cd python && ../../.venv/bin/python -m uvicorn stock_api:app --reload --port 8000",
-    "python-api:win32": "cd python && venv\\Scripts\\python -m uvicorn stock_api:app --reload --port 8000",
+    "python-api:win32": "set PYTHONIOENCODING=utf-8 && cd python && venv\\Scripts\\python -m uvicorn stock_api:app --reload --port 8000",
     "mystock": "concurrently --kill-others \"npm run python-api\" \"npm run dev\"",
     "db:migrate-data": "tsx scripts/migrate.ts"
   },
