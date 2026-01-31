@@ -3,10 +3,12 @@ import prisma from '@/lib/db';
 
 export async function DELETE(
     request: Request,
-    { params }: { params: { ticker: string } }
+    { params }: { params: Promise<{ ticker: string }> }
+    //{ params }: { params: { ticker: string } }
 ) {
     try {
-        const { ticker } = params;
+        //const { ticker } = params;
+        const { ticker } = await params;
 
         const deleteResult = await prisma.watchlist.deleteMany({
             where: { ticker },
