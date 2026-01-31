@@ -77,7 +77,7 @@ components/: 대시보드 차트 및 UI 컴포넌트
 
 prisma/: DB 스키마 및 SQL Migration (Trigger 포함)
 
-python/: 주가 수집 및 AI 리포트 생성용 FastAPI 서버
+python/: 주가 수집 및 AI 리포트 생성용 FastAPI 서버 (3.10 이 안정적 입니다.)
 
 package.json: run-script-os를 이용한 크로스 플랫폼 실행 스크립트 정의
 
