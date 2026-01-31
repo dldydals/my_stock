@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Drawer, Table, Tag, Typography, Button, Modal, Form, InputNumber, DatePicker, message, Row, Col, Space, Tooltip, Divider } from 'antd';
+// [수정 1] message를 제거하고 App을 추가했습니다.
+import { Drawer, Table, Tag, Typography, Button, Modal, Form, InputNumber, DatePicker, App, Row, Col, Space, Tooltip, Divider } from 'antd';
 import { InfoCircleOutlined, TransactionOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import dayjs from 'dayjs';
@@ -26,11 +27,14 @@ interface TransactionDrawerProps {
     stockName: string;
     transactions: Transaction[];
     currentPrice: number;
-    changeRate: number; // Added
+    changeRate: number;
     onTransactionSuccess: () => void;
 }
 
 export default function TransactionDrawer({ open, onClose, ticker, stockName, transactions, currentPrice, changeRate, onTransactionSuccess }: TransactionDrawerProps) {
+    // [수정 2] App.useApp() 훅을 사용하여 Context에 연결된 message 객체를 가져옵니다.
+    const { message } = App.useApp();
+    
     const [sellModalOpen, setSellModalOpen] = useState(false);
     const [buyModalOpen, setBuyModalOpen] = useState(false);
     const [selectedTx, setSelectedTx] = useState<Transaction | null>(null);
@@ -99,6 +103,7 @@ export default function TransactionDrawer({ open, onClose, ticker, stockName, tr
         try {
             const values = await sellForm.validateFields();
             if (values.quantity > selectedTx.remainingQuantity) {
+                // 이제 이 message는 테마가 적용된 Context API 기반 메시지입니다.
                 message.error('매도 수량이 보유한 수량을 초과할 수 없습니다.');
                 return;
             }
@@ -164,7 +169,6 @@ export default function TransactionDrawer({ open, onClose, ticker, stockName, tr
     const safeTx = Array.isArray(transactions) ? transactions : [];
 
     // Normalizing data to handle potential casing differences from API
-    // The console showed ticker and type were present, let's ensure we map snake_case to camelCase
     const normalizedTx = safeTx.map(t => {
         const item = t as any;
         return {
@@ -232,7 +236,6 @@ export default function TransactionDrawer({ open, onClose, ticker, stockName, tr
                             {Number(remQty).toLocaleString()}
                             <small className="ml-0.5 opacity-50 font-normal">주</small>
                         </Text>
-                        {/* <Text className="font-numeric" style={{ fontSize: 13, fontWeight: 700, color: '#0f172a' }}>{Number(remQty).toLocaleString()}<small className="ml-0.5 opacity-50 font-normal">주</small></Text> */}
                         <Text className="font-numeric" style={{ fontSize: 9, color: '#94a3b8' }}>/ {Number(record.quantity).toLocaleString()}주</Text>
                     </div>
                 );
