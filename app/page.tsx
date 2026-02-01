@@ -2,7 +2,7 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { Row, Col, Divider, Typography, Breadcrumb, Space, Button, Card, Modal, Form, Input, InputNumber, DatePicker, App } from 'antd';
-import { ReloadOutlined, DatabaseOutlined } from '@ant-design/icons';
+import { ReloadOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import SummaryStats from '../components/dashboard/SummaryStats';
 import AssetPieChart from '../components/dashboard/AssetPieChart';
@@ -11,19 +11,29 @@ import TransactionDrawer from '../components/dashboard/TransactionDrawer';
 import PortfolioInsights from '../components/dashboard/PortfolioInsights';
 import AIReportCard from '../components/dashboard/AIReportCard';
 import WatchlistSection from '../components/dashboard/WatchlistSection';
+// ▼▼▼ [중요] 훅 import (경로 확인해주세요) ▼▼▼
+import { useStockData } from '../components/dashboard/useStockData';
 
 const { Title, Text } = Typography;
 
 export default function Home() {
   const { message } = App.useApp();
-  const [loading, setLoading] = useState(true);
-  const [holdings, setHoldings] = useState<any[]>([]);
-  const [balances, setBalances] = useState<any[]>([]);
+  
+  // ▼▼▼ [핵심] useStockData 훅을 사용하여 데이터와 로직을 한 번에 가져옵니다.
+  const { 
+    stockSummaries, 
+    portfolioSummary, 
+    cashData, 
+    updateCash, 
+    addHolding,
+    lastUpdate 
+  } = useStockData();
+
+  // UI 상태 관리
   const [transactions, setTransactions] = useState<any[]>([]);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [selectedStock, setSelectedStock] = useState<any>(null);
-  const [cashModalOpen, setCashModalOpen] = useState(false);
-  const [lastSyncTime, setLastSyncTime] = useState<string>("");
+  
   const [newStockModalOpen, setNewStockModalOpen] = useState(false);
   const [newStockForm] = Form.useForm();
 
@@ -31,42 +41,12 @@ export default function Home() {
   const [aiReport, setAiReport] = useState<any>(null);
   const [aiLoading, setAiLoading] = useState(false);
 
-  const fetchData = async () => {
-    setLoading(true);
-    try {
-      const [holdRes, cashRes] = await Promise.all([
-        fetch('/api/holdings'),
-        fetch('/api/cash')
-      ]);
-
-      const holdData = await holdRes.json();
-      const cashData = await cashRes.json();
-
-      if (!holdData.error) {
-        setHoldings(holdData);
-      }
-
-      if (!cashData.error) {
-        setBalances([
-          { type: 'DEPOSIT', balance: cashData.deposit },
-          { type: 'CMA', balance: cashData.cma },
-          { type: 'TOTAL_DEPOSIT', balance: cashData.totalDeposit },
-          { type: 'TOTAL_WITHDRAWAL', balance: cashData.totalWithdrawal }
-        ]);
-      }
-    } catch (e) {
-      console.error("Data fetch failed", e);
-    } finally {
-      setLoading(false);
-      setLastSyncTime(new Date().toLocaleTimeString());
-    }
-  };
-
+  // AI 리포트 가져오기 (이건 별도 API라 유지)
   const fetchAIReport = async () => {
     try {
       const res = await fetch('http://localhost:8000/ai/latest');
       const data = await res.json();
-      if (!data.message) { // "No reports found" check
+      if (!data.message) { 
         setAiReport(data);
       }
     } catch (e) {
@@ -74,21 +54,24 @@ export default function Home() {
     }
   };
 
+  useEffect(() => {
+    fetchAIReport();
+  }, []);
+
   // AI 분석 트리거
   const triggerAIAnalysis = async () => {
     setAiLoading(true);
     try {
-      // Fetch the latest watchlist from DB
       const wlRes = await fetch('/api/watchlist');
       const wlData = await wlRes.json();
-      const watchlist = wlData.map((w: any) => ({ name: w.name, ticker: w.ticker }));
+      const watchlist = wlData.map((w: any) => ({ name: w.name, code: w.ticker }));
 
       const response = await fetch('http://localhost:8000/ai/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          holdings: holdings.map(h => ({ name: h.name, code: h.ticker })),
-          watchlist: watchlist.map((w: any) => ({ name: w.name, code: w.ticker }))
+          holdings: stockSummaries.map(h => ({ name: h.name, code: h.code })),
+          watchlist: watchlist
         }),
       });
       const result = await response.json();
@@ -103,34 +86,17 @@ export default function Home() {
     }
   };
 
-  useEffect(() => {
-    fetchData();
-    fetchAIReport();
-    // 10초마다 자동 갱신
-    const interval = setInterval(fetchData, 10000);
-    return () => clearInterval(interval);
-  }, []);
+  // 실시간 선택된 종목 데이터 트래킹 (훅 데이터 기반)
+  const latestSelectedStock = useMemo(() => 
+    stockSummaries.find(h => h.code === selectedStock?.ticker) || selectedStock
+  , [stockSummaries, selectedStock]);
 
-  const totalAssetsValue = useMemo(() => holdings.reduce((sum, item) => sum + (item.currentPrice * item.quantity), 0), [holdings]);
-  const totalBuyAmount = useMemo(() => holdings.reduce((sum, item) => sum + (item.avgPrice * item.quantity), 0), [holdings]);
-  const totalPnL = totalAssetsValue - totalBuyAmount;
-
-
-  const deposit = useMemo(() => balances.find(b => b.type === 'DEPOSIT')?.balance || 0, [balances]);
-  const cma = useMemo(() => balances.find(b => b.type === 'CMA')?.balance || 0, [balances]);
-  const totalDeposit = useMemo(() => balances.find(b => b.type === 'TOTAL_DEPOSIT')?.balance || 0, [balances]);
-  const totalWithdrawal = useMemo(() => balances.find(b => b.type === 'TOTAL_WITHDRAWAL')?.balance || 0, [balances]);
-
-  // 실시간 선택된 종목 데이터 트래킹
-  const latestSelectedStock = useMemo(() =>
-    holdings.find(h => h.ticker === selectedStock?.ticker) || selectedStock
-    , [holdings, selectedStock]);
-
+  // 파이 차트 데이터 생성 (훅 데이터 기반)
   const pieData = useMemo(() => [
-    ...holdings.map(item => ({ type: item.name, value: item.currentPrice * item.quantity })),
-    { type: '예수금', value: deposit },
-    { type: 'CMA', value: cma }
-  ].filter(item => item.value > 0), [holdings, deposit, cma]);
+    ...stockSummaries.map(item => ({ type: item.name, value: item.currentAmount })),
+    { type: '예수금', value: cashData.deposit },
+    { type: 'CMA', value: cashData.cma }
+  ].filter(item => item.value > 0), [stockSummaries, cashData]);
 
   const handleRowClick = async (record: any) => {
     setSelectedStock(record);
@@ -145,40 +111,26 @@ export default function Home() {
   };
 
   const onTransactionSuccess = () => {
-    fetchData();
+    // 훅 내부 데이터는 자동 갱신되지만, 즉시 반영을 위해 페이지 리로드 혹은 로직 추가 가능
+    // 여기서는 간단히 선택된 종목 갱신 로직만 유지
     if (selectedStock) {
       handleRowClick(selectedStock);
     }
+    // 페이지 전체 데이터는 useStockData의 interval에 의해 갱신됨
+    window.location.reload(); // 가장 확실한 방법 (임시)
   };
 
-  const refreshData = () => {
-    fetchData();
-  };
-
-  const handleCashUpdate = async (data: { deposit?: number; cma?: number; totalDeposit?: number; totalWithdrawal?: number }) => {
-    try {
-      const res = await fetch('/api/cash', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-      });
-      if (res.ok) {
-        console.log("Cash update successful, fetching new data...");
-        await fetchData();
-      } else {
-        const errorData = await res.json().catch(() => ({ error: "Unknown error" }));
-        console.error("API returned error for cash update:", errorData.error);
-        alert(`저장 실패: ${errorData.error}`);
-      }
-    } catch (e) {
-      console.error("Cash update failed", e);
-    }
+  const handleCashUpdate = async (data: any) => {
+    await updateCash(data); // 훅의 함수 사용
+    message.success('현금 자산이 업데이트되었습니다.');
   };
 
   const handleNewStockSubmit = async () => {
     try {
       const values = await newStockForm.validateFields();
-
+      
+      // 훅의 addHolding 사용 또는 기존 API 호출 유지
+      // 트랜잭션 기록이 중요하므로 기존 API 호출 방식을 유지하되, 성공 후 훅 갱신 유도
       const res = await fetch('/api/transactions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -197,7 +149,8 @@ export default function Home() {
         message.success('신규 종목 매수가 등록되었습니다.');
         setNewStockModalOpen(false);
         newStockForm.resetFields();
-        await fetchData();
+        // 데이터 갱신을 위해 리로드 (useStockData에 강제 리프레시 기능이 없다면)
+        window.location.reload();
       } else {
         message.error('등록 중 오류가 발생했습니다.');
       }
@@ -206,24 +159,17 @@ export default function Home() {
     }
   };
 
-  // Hydration fix for client-side only time rendering
   const [mounted, setMounted] = useState(false);
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  useEffect(() => { setMounted(true); }, []);
+
+  if (!mounted) return null;
 
   return (
     <main className="min-h-screen">
-      {/* Premium Glass Header */}
+      {/* Header */}
       <div className="glass-card mb-8 p-6 rounded-3xl border border-white/40 flex flex-col md:flex-row justify-between items-start md:items-center gap-6 transition-all duration-300">
         <div className="flex flex-col gap-1">
-          <Breadcrumb
-            items={[
-              { title: 'Home' },
-              { title: 'Dashboard' },
-            ]}
-            className="mb-1 text-[10px] uppercase tracking-widest font-bold opacity-40"
-          />
+          <Breadcrumb items={[{ title: 'Home' }, { title: 'Dashboard' }]} className="mb-1 text-[10px] uppercase tracking-widest font-bold opacity-40" />
           <Title level={1} style={{ margin: 0, fontWeight: 900, letterSpacing: '-2px', color: 'var(--foreground)', fontSize: 32 }}>
             Portfolio <Text style={{ fontSize: 24, fontWeight: 300, color: 'var(--foreground)', opacity: 0.6, marginLeft: 4 }}>Analytics</Text>
           </Title>
@@ -231,58 +177,30 @@ export default function Home() {
         <div className="flex items-center gap-6">
           <div className="hidden sm:flex flex-col items-end">
             <Text type="secondary" style={{ fontSize: 10, fontWeight: 600, color: '#94a3b8' }}>LAST SYNC</Text>
-            <Text className="font-numeric" strong style={{ fontSize: 14, color: 'var(--foreground)', opacity: 0.9 }}>{lastSyncTime || '--:--:--'}</Text>
+            <Text className="font-numeric" strong style={{ fontSize: 14, color: 'var(--foreground)', opacity: 0.9 }}>{lastUpdate || '--:--:--'}</Text>
           </div>
-          <Button
-            size="large"
-            type="default"
-            onClick={() => setNewStockModalOpen(true)}
-            style={{
-              borderRadius: 14,
-              height: 48,
-              padding: '0 24px',
-              fontWeight: 700,
-              background: '#10b981',
-              borderColor: '#10b981',
-              color: 'white',
-              marginRight: 12
-            }}
-          >
+          <Button size="large" type="default" onClick={() => setNewStockModalOpen(true)} style={{ borderRadius: 14, height: 48, padding: '0 24px', fontWeight: 700, background: '#10b981', borderColor: '#10b981', color: 'white', marginRight: 12 }}>
             + 신규 종목 매수
           </Button>
-          <Button
-            size="large"
-            type="primary"
-            icon={<ReloadOutlined />}
-            loading={loading}
-            onClick={refreshData}
-            style={{
-              borderRadius: 14,
-              height: 48,
-              padding: '0 28px',
-              fontWeight: 700,
-              boxShadow: '0 4px 14px 0 rgba(59, 130, 246, 0.3)',
-              border: 'none',
-              background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)'
-            }}
-          >
+          <Button size="large" type="primary" icon={<ReloadOutlined />} onClick={() => window.location.reload()} style={{ borderRadius: 14, height: 48, padding: '0 28px', fontWeight: 700, boxShadow: '0 4px 14px 0 rgba(59, 130, 246, 0.3)', border: 'none', background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)' }}>
             데이터 동기화
           </Button>
         </div>
       </div>
 
       <Row gutter={[24, 24]}>
-        {/* Left Section: Stats and Chart */}
+        {/* Left Section */}
         <Col xs={24} lg={7}>
           <Space orientation="vertical" size={32} style={{ width: '100%' }}>
             <SummaryStats
-              totalAssets={totalAssetsValue}
-              todayPnL={totalPnL}
-              totalBuyAmount={totalBuyAmount}
-              cashDeposit={deposit}
-              cashCma={cma}
-              totalCumulativeDeposit={totalDeposit}
-              totalCumulativeWithdrawal={totalWithdrawal}
+              totalAssets={portfolioSummary.totalCurrentAmount} // 훅 데이터 연결
+              todayPnL={portfolioSummary.totalNetProfit}
+              totalBuyAmount={portfolioSummary.totalBuyAmount}
+              cashDeposit={cashData.deposit}
+              cashCma={cashData.cma}
+              // ▼▼▼ [수정] 0 대신 실제 데이터를 연결합니다 ▼▼▼
+              totalCumulativeDeposit={cashData.totalDeposit || 0}
+              totalCumulativeWithdrawal={cashData.totalWithdrawal || 0}              
               onUpdateCash={handleCashUpdate}
             />
 
@@ -292,35 +210,23 @@ export default function Home() {
               onRefresh={triggerAIAnalysis}
             />
 
-            <Card
-              className="shadow-sm border-slate-100 dark:border-slate-800 overflow-hidden"
-              styles={{
-                header: { background: 'rgba(52, 211, 153, 0.05)', borderBottom: '1px solid rgba(52, 211, 153, 0.1)', minHeight: 40 },
-                body: { padding: '20px 16px' }
-              }}
-              title={
-                <Space size={8} orientation="horizontal">
-                  <div className="w-1.5 h-4 bg-emerald-500 rounded-full shadow-[0_0_8px_rgba(16,185,129,0.3)]" />
-                  <span className="text-sm font-bold" style={{ color: 'var(--foreground)', opacity: 0.8 }}>자산 배분 현황</span>
-                </Space>
-              }
-            >
+            <Card className="shadow-sm border-slate-100 dark:border-slate-800 overflow-hidden" styles={{ header: { background: 'rgba(52, 211, 153, 0.05)', borderBottom: '1px solid rgba(52, 211, 153, 0.1)', minHeight: 40 }, body: { padding: '20px 16px' } }} title={<Space size={8} orientation="horizontal"><div className="w-1.5 h-4 bg-emerald-500 rounded-full shadow-[0_0_8px_rgba(16,185,129,0.3)]" /><span className="text-sm font-bold" style={{ color: 'var(--foreground)', opacity: 0.8 }}>자산 배분 현황</span></Space>}>
               <AssetPieChart data={pieData} />
             </Card>
 
             <PortfolioInsights
-              holdings={holdings.map(h => ({
+              holdings={stockSummaries.map(h => ({
                 name: h.name,
-                ticker: h.ticker,
-                currentAmount: h.currentPrice * h.quantity,
-                yield: h.avgPrice > 0 ? ((h.currentPrice - h.avgPrice) / h.avgPrice) * 100 : 0
+                ticker: h.code,
+                currentAmount: h.currentAmount,
+                yield: Number(h.returnRate)
               }))}
-              cashTotal={deposit + cma}
+              cashTotal={portfolioSummary.totalCash}
             />
           </Space>
         </Col>
 
-        {/* Right Section: Main Table Area turned into Card Grid Area */}
+        {/* Right Section */}
         <Col xs={24} lg={17}>
           <div className="flex justify-between items-center mb-6 pl-2">
             <Space size={12}>
@@ -333,13 +239,27 @@ export default function Home() {
           </div>
 
           <StockTable
-            data={holdings}
+            // ▼▼▼ [핵심 수정] 훅 데이터를 Table 포맷으로 매핑하며 strategy 전달 ▼▼▼
+            data={stockSummaries.map(s => ({
+              key: s.code,
+              ticker: s.code,
+              name: s.name,
+              quantity: s.quantity,
+              avgPrice: s.avgBuyPrice,
+              currentPrice: s.currentPrice,
+              changeRate: s.change_rate || 0,
+              yield: Number(s.returnRate),
+              PnL: s.netProfit,
+              allocation: portfolioSummary.totalCurrentAmount > 0 
+                ? (s.currentAmount / portfolioSummary.totalCurrentAmount) * 100 
+                : 0,
+              strategy: s.strategy // 👈 전략 데이터 필드 연결!
+            }))}
             onRowClick={handleRowClick}
             aiReport={aiReport}
           />
 
           <Divider style={{ margin: '40px 0' }} />
-
           <WatchlistSection aiReport={aiReport} />
         </Col>
       </Row>
@@ -348,62 +268,37 @@ export default function Home() {
       <TransactionDrawer
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}
-        ticker={latestSelectedStock?.ticker || ''}
+        ticker={latestSelectedStock?.code || latestSelectedStock?.ticker || ''}
         stockName={latestSelectedStock?.name || ''}
         transactions={transactions}
-        currentPrice={latestSelectedStock?.currentPrice || 0} // Pass real-time currentPrice
-        changeRate={latestSelectedStock?.changeRate || 0} // Pass daily change rate
+        currentPrice={latestSelectedStock?.currentPrice || 0}
+        changeRate={latestSelectedStock?.change_rate || latestSelectedStock?.changeRate || 0}
         onTransactionSuccess={onTransactionSuccess}
       />
 
       {/* New Stock Purchase Modal */}
-      <Modal
-        title="신규 종목 매수 등록"
-        open={newStockModalOpen}
-        onCancel={() => setNewStockModalOpen(false)}
-        onOk={handleNewStockSubmit}
-        okText="매수 등록"
-        cancelText="취소"
-        width={500}
-      >
+      <Modal title="신규 종목 매수 등록" open={newStockModalOpen} onCancel={() => setNewStockModalOpen(false)} onOk={handleNewStockSubmit} okText="매수 등록" cancelText="취소" width={500}>
         <Form form={newStockForm} layout="vertical" style={{ marginTop: 24 }}>
           <Row gutter={16}>
             <Col span={12}>
-              <Form.Item
-                name="ticker"
-                label="종목 코드"
-                rules={[{ required: true, message: '종목 코드를 입력해주세요' }]}
-              >
+              <Form.Item name="ticker" label="종목 코드" rules={[{ required: true, message: '종목 코드를 입력해주세요' }]}>
                 <Input placeholder="예: 005930" />
               </Form.Item>
             </Col>
             <Col span={12}>
-              <Form.Item
-                name="name"
-                label="종목명"
-                rules={[{ required: true, message: '종목명을 입력해주세요' }]}
-              >
+              <Form.Item name="name" label="종목명" rules={[{ required: true, message: '종목명을 입력해주세요' }]}>
                 <Input placeholder="예: 삼성전자" />
               </Form.Item>
             </Col>
           </Row>
           <Row gutter={16}>
             <Col span={12}>
-              <Form.Item
-                name="quantity"
-                label="매수 수량"
-                rules={[{ required: true, message: '수량을 입력해주세요' }]}
-                initialValue={1}
-              >
+              <Form.Item name="quantity" label="매수 수량" rules={[{ required: true, message: '수량을 입력해주세요' }]} initialValue={1}>
                 <InputNumber min={1} style={{ width: '100%' }} />
               </Form.Item>
             </Col>
             <Col span={12}>
-              <Form.Item
-                name="price"
-                label="매수 단가"
-                rules={[{ required: true, message: '단가를 입력해주세요' }]}
-              >
+              <Form.Item name="price" label="매수 단가" rules={[{ required: true, message: '단가를 입력해주세요' }]}>
                 <InputNumber min={0} style={{ width: '100%' }} />
               </Form.Item>
             </Col>
@@ -415,12 +310,7 @@ export default function Home() {
               </Form.Item>
             </Col>
             <Col span={12}>
-              <Form.Item
-                name="tradeDate"
-                label="매수 일자"
-                rules={[{ required: true, message: '날짜를 선택해주세요' }]}
-                initialValue={dayjs()}
-              >
+              <Form.Item name="tradeDate" label="매수 일자" rules={[{ required: true, message: '날짜를 선택해주세요' }]} initialValue={dayjs()}>
                 <DatePicker style={{ width: '100%' }} />
               </Form.Item>
             </Col>

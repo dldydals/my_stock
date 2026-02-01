@@ -1,4 +1,3 @@
-# stock_api.py
 import os
 import json
 import psycopg2
@@ -9,17 +8,149 @@ from pykrx import stock
 import pandas as pd
 import yfinance as yf
 from datetime import datetime, timedelta
-import datetime as dt_module # Renaming to avoid confusion with datetime class
+import datetime as dt_module
 from dotenv import load_dotenv
 
+# ▼▼▼ 추가된 라이브러리 (크롤링, 스케줄러, 파일저장) ▼▼▼
+import requests
+from bs4 import BeautifulSoup
+from io import StringIO
+from contextlib import asynccontextmanager
+from apscheduler.schedulers.background import BackgroundScheduler
+# ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
 
-
-# Load environment variables (DATABASE_URL, GOOGLE_API_KEY)
 load_dotenv()
 
 from ai_analyst import AIAnalyst
 
-app = FastAPI()
+# =========================================================
+# 💾 [Global Cache] & 📁 [File Persistence]
+# =========================================================
+CACHE_FILE = "investor_cache.json"
+INVESTOR_CACHE = {}
+
+def load_cache():
+    """서버 시작 시 파일에서 캐시 불러오기"""
+    global INVESTOR_CACHE
+    if os.path.exists(CACHE_FILE):
+        try:
+            with open(CACHE_FILE, "r", encoding="utf-8") as f:
+                INVESTOR_CACHE = json.load(f)
+            print(f"✅ [System] 캐시 파일 복구 완료: {len(INVESTOR_CACHE)}개 종목")
+        except Exception as e:
+            print(f"⚠️ [System] 캐시 파일 로드 실패: {e}")
+
+def save_cache():
+    """캐시 업데이트 시 파일로 저장하기"""
+    try:
+        with open(CACHE_FILE, "w", encoding="utf-8") as f:
+            json.dump(INVESTOR_CACHE, f, ensure_ascii=False, indent=4)
+    except Exception as e:
+        print(f"⚠️ [System] 캐시 저장 실패: {e}")
+
+# =========================================================
+# 🕷️ [Crawler] 네이버 금융 잠정치 크롤링
+# =========================================================
+def crawl_naver_preliminary(ticker: str):
+    """네이버 금융에서 특정 종목의 잠정치를 가져와 반환"""
+    url = f"https://finance.naver.com/item/frgn.naver?code={ticker}"
+    headers = {'User-Agent': 'Mozilla/5.0'}
+    
+    try:
+        response = requests.get(url, headers=headers, timeout=2)
+        html = response.content.decode('euc-kr', 'replace')
+        soup = BeautifulSoup(html, 'html.parser')
+        
+        target_table = None
+        for table in soup.find_all("table", class_="type2"):
+            if "잠정" in table.text:
+                target_table = table
+                break
+        
+        if not target_table:
+            analysis_div = soup.find('div', {'id': 'analysis'})
+            if analysis_div:
+                target_table = analysis_div.find('table')
+
+        if target_table:
+            df = pd.read_html(StringIO(str(target_table)))[0]
+            df = df.dropna(how='all')
+            if len(df.columns) >= 3:
+                # 유효한 시간대 데이터만 필터링 (09:00, 10:00 등 시간이 있는 행)
+                valid_rows = df[df.iloc[:, 0].str.contains(':', na=False)]
+                if not valid_rows.empty:
+                    # 가장 최신(마지막 행) 데이터를 가져옴
+                    latest = valid_rows.iloc[-1]
+                    return {
+                        'time': latest.iloc[0],
+                        'foreigner': int(str(latest.iloc[1]).replace(',', '')),
+                        'institution': int(str(latest.iloc[2]).replace(',', ''))
+                    }
+    except Exception:
+        pass
+    return None
+
+# =========================================================
+# ⏰ [Scheduler Job] 수급 데이터 백그라운드 갱신
+# =========================================================
+def update_all_investor_data():
+    """DB의 Watchlist 종목들을 긁어서 캐시를 업데이트하고 파일로 저장"""
+    print(f"[{datetime.now().strftime('%H:%M:%S')}] 🔄 수급 데이터 백그라운드 갱신 시작...")
+    
+    target_tickers = set()
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("SELECT ticker FROM watchlist")
+        for row in cur.fetchall():
+            target_tickers.add(row[0])
+        cur.close()
+        conn.close()
+    except Exception as e:
+        print(f"DB Error during schedule: {e}")
+
+    count = 0
+    updated = False
+    for ticker in target_tickers:
+        data = crawl_naver_preliminary(ticker)
+        if data:
+            INVESTOR_CACHE[ticker] = data
+            count += 1
+            updated = True
+            
+    if updated:
+        save_cache()
+            
+    print(f"[{datetime.now().strftime('%H:%M:%S')}] ✅ {count}/{len(target_tickers)} 종목 갱신 및 저장 완료.")
+
+# =========================================================
+# 🚀 [Lifespan] 서버 시작/종료 관리
+# =========================================================
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # 1. 시작 시 캐시 로드
+    load_cache()
+    
+    # 2. 스케줄러 시작
+    scheduler = BackgroundScheduler()
+    scheduler.add_job(update_all_investor_data, 'interval', minutes=10) # 10분 주기
+    
+    # 주요 발표 시간대 Cron 등록 (보조)
+    for h, m in [('9','32'), ('10','02'), ('11','32'), ('13','22'), ('14','32')]:
+        scheduler.add_job(update_all_investor_data, 'cron', hour=h, minute=m)
+        
+    scheduler.start()
+    
+    # 3. 서버 시작 직후 한 번 실행 (데이터 최신화)
+    scheduler.add_job(update_all_investor_data)
+    
+    yield # 앱 실행 중...
+    
+    # 4. 종료 시 스케줄러 끄기
+    scheduler.shutdown()
+
+# 앱 생성 (Lifespan 적용)
+app = FastAPI(lifespan=lifespan)
 ai_analyst = AIAnalyst()
 
 # Database Connection Helper
@@ -27,94 +158,47 @@ def get_db_connection():
     db_url = os.environ.get("DATABASE_URL")
     if not db_url:
         raise Exception("DATABASE_URL not found in environment")
-    
-    # Handle the case where Prisma style URL needs adjustment for psycopg2
-    # Strip query parameters like ?schema=public which psycopg2 might not like
     if "?" in db_url:
         db_url = db_url.split("?")[0]
-        
     return psycopg2.connect(db_url)
 
-# ==========================================
-# 👇 CORS 설정 (이 부분이 핵심입니다!)
-# ==========================================
+# CORS 설정
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],      # 모든 주소(*) 허용 (localhost, 127.0.0.1 등 모두 OK)
+    allow_origins=["*"],
     allow_credentials=True,
-    allow_methods=["*"],      # GET, POST 등 모든 방법 허용
-    allow_headers=["*"],      # 모든 헤더 허용
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
-# ==========================================
 
-# ==========================================
 # 🛠️ [Helper] 유효한 데이터 찾기 도우미 함수
-# ==========================================
 def get_valid_fundamental(ticker: str, retries=5):
-    """
-    오늘 날짜부터 과거로 거슬러 올라가며 
-    PER/PBR 데이터가 '0이 아닌' 가장 최근 데이터를 찾습니다.
-    """
     for i in range(retries):
         target_date = (datetime.now() - timedelta(days=i)).strftime("%Y%m%d")
         try:
             df = stock.get_market_fundamental_by_ticker(date=target_date, market="ALL")
-            # 데이터가 있고, 해당 종목이 존재하며, PER가 0이 아니면 채택
             if not df.empty and ticker in df.index:
-                # PBR이 0보다 크면 유효한 데이터로 간주 (PER는 적자기업일 경우 0일 수 있으나 PBR은 보통 있음)
-                if df.loc[ticker, "PBR"] > 0:
-                    return df.loc[ticker]
-        except:
+                row = df.loc[ticker]
+                if row['PBR'] > 0 or row['DIV'] > 0:
+                    return row
+        except Exception:
             continue
     return None
 
 def get_valid_investor_data(ticker: str, retries=5):
-    """
-    오늘 날짜부터 과거로 거슬러 올라가며
-    외국인/기관 수급 데이터가 있는 가장 최근 날짜를 찾습니다.
-    """
+    """Pykrx를 통해 '확정된' 최신 수급 데이터를 가져옴 (장 마감 데이터)"""
     for i in range(retries):
         target_date = (datetime.now() - timedelta(days=i)).strftime("%Y%m%d")
         try:
-            # 일자별 투자자 순매수 (하루치)
             df = stock.get_market_investor_net_purchase_by_date(target_date, target_date, ticker)
             if not df.empty:
-                # 데이터가 전부 0이면(휴일 등) 패스, 값이 하나라도 있으면 리턴
                 if df['외국인'].iloc[-1] != 0 or df['기관합계'].iloc[-1] != 0:
                     return df.iloc[-1]
         except:
             continue
     return None    
 
-def get_latest_trading_data(ticker: str, days_to_look_back: int = 7):
-    now = datetime.datetime.now()
-    end_date = now.strftime("%Y%m%d")
-    start_date = (now - datetime.timedelta(days=days_to_look_back)).strftime("%Y%m%d")
-    return start_date, end_date
-
-# [Heavy] 상세 정보 (최초 로딩, 날짜 변경 시 호출)
-# stock_api.py 수정
-
-def get_valid_fundamental(ticker: str, retries=5): # Reduced retries to speed up
-    """
-    오늘 날짜부터 과거로 거슬러 올라가며 
-    데이터가 존재하는 가장 최근 날짜의 펀더멘털을 찾습니다.
-    """
-    for i in range(retries):
-        target_date = (datetime.now() - timedelta(days=i)).strftime("%Y%m%d")
-        try:
-            # Adding a small timeout logic is hard with pykrx, but we can at least reduce retries
-            df = stock.get_market_fundamental_by_ticker(date=target_date, market="ALL")
-            if not df.empty and ticker in df.index:
-                row = df.loc[ticker]
-                # DIV(배당수익률)이나 PBR 중 하나라도 데이터가 있으면 유효한 날짜로 간주
-                if row['PBR'] > 0 or row['DIV'] > 0:
-                    print(f"Found fundamental data for {ticker} on {target_date}")
-                    return row
-        except Exception:
-            continue
-    return None
-
+# [Endpoint] 상세 정보
 @app.get("/stock/{ticker}")
 def get_stock_detail(ticker: str):
     try:
@@ -127,9 +211,8 @@ def get_stock_detail(ticker: str):
             raise HTTPException(status_code=404, detail="No Price Data")
         
         last_price = df_price.iloc[-1]
-        last_date = df_price.index[-1].strftime("%Y%m%d")
         
-        # 2. 펀더멘컬 데이터 (pykrx 내부 오류 대응)
+        # 2. 펀더멘컬 데이터
         per, pbr, div_yield = None, None, None
         try:
             fund_data = get_valid_fundamental(ticker)
@@ -138,12 +221,12 @@ def get_stock_detail(ticker: str):
                 pbr = float(fund_data['PBR'])
                 div_yield = float(fund_data['DIV'])
         except Exception as fe:
-            print(f"Fundamental data scrape failed for {ticker}: {fe}")
+            print(f"Fundamental scrape failed: {fe}")
         
         # 3. 시가총액
         market_cap = 0
         try:
-            cap_df = stock.get_market_cap(last_date, last_date, ticker)
+            cap_df = stock.get_market_cap(end_date, end_date, ticker)
             if not cap_df.empty and ticker in cap_df.index:
                 market_cap = int(cap_df.loc[ticker, "시가총액"])
         except:
@@ -160,7 +243,6 @@ def get_stock_detail(ticker: str):
             "market_cap": market_cap,
             "data_source_status": "FUNDAMENTAL_UNAVAILABLE" if div_yield is None else "OK"
         }
-
     except HTTPException as http_e:
         raise http_e
     except Exception as e:
@@ -168,7 +250,7 @@ def get_stock_detail(ticker: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# [Light] 현재가 단순 조회 (3분 주기 호출)
+# [Endpoint] 현재가 단순 조회
 @app.get("/price/{ticker}")
 def get_stock_price(ticker: str):
     try:
@@ -180,7 +262,6 @@ def get_stock_price(ticker: str):
         
         last_price = df_price.iloc[-1]
         
-        # Calculate change amount if possible
         change_amount = 0
         if len(df_price) > 1:
             prev_close = df_price['종가'].iloc[-2]
@@ -197,9 +278,8 @@ def get_stock_price(ticker: str):
 
 
 # ==========================================
-# 👇 전략 감시 시스템 (Batch Analysis)
+# 👇 전략 감시 시스템 (Batch Analysis) - 수정됨
 # ==========================================
-
 from pydantic import BaseModel
 from typing import List, Dict, Any
 
@@ -219,11 +299,10 @@ def calculate_rsi(df, period=14):
     return rsi.iloc[-1]
 
 def analyze_ticker(ticker: str) -> Dict[str, Any]:
-    now = datetime.datetime.now()
+    now = datetime.now()
     today = now.strftime("%Y%m%d")
-    start_date = (now - datetime.timedelta(days=60)).strftime("%Y%m%d")
+    start_date = (now - timedelta(days=60)).strftime("%Y%m%d")
     
-    # 1. 시세 & RSI
     # 1. 시세 & RSI
     try:
         df = stock.get_market_ohlcv(start_date, today, ticker)
@@ -233,63 +312,55 @@ def analyze_ticker(ticker: str) -> Dict[str, Any]:
         current_price = int(df['종가'].iloc[-1])
         open_price = int(df['시가'].iloc[-1])
         prev_close = int(df['종가'].iloc[-2]) if len(df) > 1 else current_price
-        df = df.fillna(0) # NaN 처리
+        df = df.fillna(0)
         
         current_rsi = float(calculate_rsi(df, 14))
-        if pd.isna(current_rsi): current_rsi = 50.0 # 기본값
+        if pd.isna(current_rsi): current_rsi = 50.0
 
-        # 2. 투자자별 순매수 (외국인, 기관, 개인)
+        # =========================================================
+        # 2. 투자자별 순매수 (하이브리드 로직)
+        # =========================================================
+        # Step 1: 기본값 (Pykrx - 확정 데이터)
         foreigner_net = 0
         institution_net = 0
         individual_net = 0
+        data_source = "DAILY_CLOSE" 
 
-        investor_data = get_valid_investor_data(ticker) # 헬퍼 함수 사용
-
+        investor_data = get_valid_investor_data(ticker)
         if investor_data is not None:
-            # 컬럼명이 조금씩 다를 수 있어 .get() 사용
             foreigner_net = int(investor_data.get('외국인', 0))
             institution_net = int(investor_data.get('기관합계', 0))
             individual_net = int(investor_data.get('개인', 0))
+
+        # Step 2: 장중이고 캐시 데이터가 있으면 덮어쓰기 (Live 잠정치)
+        is_market_open = (9 <= now.hour < 16)
+        
+        if is_market_open and (ticker in INVESTOR_CACHE):
+            cached = INVESTOR_CACHE[ticker]
+            foreigner_net = cached['foreigner']
+            institution_net = cached['institution']
+            individual_net = 0 # 잠정치는 개인 데이터 없음
+            data_source = f"LIVE_EST({cached['time']})"
+        # =========================================================
 
         # 3. 전략 판정
         alerts = []
         is_gap_up = open_price > prev_close
         is_opening_defended = current_price >= open_price
         
-        # 3-1. RSI 과매도 (매수 신호)
         if current_rsi <= 30.0:
-            alerts.append({
-                "code": "RSI_BUY",
-                "level": "success", 
-                "message": f"매수 신호 (RSI {current_rsi:.1f} 과매도)"
-            })
+            alerts.append({"code": "RSI_BUY", "level": "success", "message": f"매수 신호 (RSI {current_rsi:.1f})"})
         
-        # 3-2. 외국인 매도 경고 (항시)
         if foreigner_net < 0:
-             alerts.append({
-                "code": "FOREIGNER_SELL_WARN",
-                "level": "warning", 
-                "message": "외국인 순매도 중"
-            })
+             alerts.append({"code": "FOREIGNER_SELL_WARN", "level": "warning", "message": "외국인 순매도 중"})
 
-        # 3-3. 점심 찬스 (12~13시)
-        # 조건: 갭상승 + RSI 55~65 + 외국인 매수 유지
-        if 12 <= now.hour < 14: # 점심 시간대 (약간 넓게 잡음)
+        if 12 <= now.hour < 14:
              if is_gap_up and (50 <= current_rsi <= 70) and (foreigner_net > 0):
-                alerts.append({
-                    "code": "LUNCH_CHANCE",
-                    "level": "success",
-                    "message": "점심 찬스: 추가 20주 매수 추천 (수급+갭상승)"
-                })
+                alerts.append({"code": "LUNCH_CHANCE", "level": "success", "message": "점심 찬스: 수급+갭상승"})
 
-        # 3-4. 오후장 수급 이탈 경고 (14시 이후)
         if now.hour >= 14:
-            if foreigner_net < 0: # 외국인 이탈
-                 alerts.append({
-                    "code": "AFTERNOON_WARNING",
-                    "level": "warning",
-                    "message": "오후장 외국인 이탈 경고"
-                })
+            if foreigner_net < 0: 
+                 alerts.append({"code": "AFTERNOON_WARNING", "level": "warning", "message": "오후장 외국인 이탈 경고"})
 
         return {
             "price": current_price,
@@ -299,7 +370,8 @@ def analyze_ticker(ticker: str) -> Dict[str, Any]:
             "individual": individual_net,
             "is_gap_up": is_gap_up,
             "is_opening_defended": is_opening_defended,
-            "alerts": alerts
+            "alerts": alerts,
+            "data_source": data_source
         }
     except Exception as e:
         print(f"Analysis error {ticker}: {e}")
@@ -316,7 +388,6 @@ def batch_strategy_analysis(payload: TickerList):
 # ==========================================
 # 🤖 AI Analyst (Gemini) Endpoints
 # ==========================================
-
 class StockInfo(BaseModel):
     name: str
     code: str
@@ -327,10 +398,7 @@ class AIAnalysisRequest(BaseModel):
 
 @app.post("/ai/analyze")
 def trigger_ai_analysis(payload: AIAnalysisRequest):
-    """Trigger a new AI analysis report and save to DB"""
     try:
-        # 1. Generate Report
-        # Transform the Pydantic models to dictionaries for the analyst
         holdings_data = [{"name": h.name, "code": h.code} for h in payload.holdings]
         watchlist_data = [{"name": h.name, "code": h.code} for h in payload.watchlist]
         
@@ -339,24 +407,18 @@ def trigger_ai_analysis(payload: AIAnalysisRequest):
         if "error" in report:
             raise HTTPException(status_code=500, detail=report["error"])
         
-        # 2. Save to Database (PostgreSQL)
         conn = get_db_connection()
         cur = conn.cursor()
-        
         today = datetime.now().date()
-        
-        # Upsert report for today
         cur.execute("""
             INSERT INTO daily_reports (date, content, created_at)
             VALUES (%s, %s, NOW())
             ON CONFLICT (date) DO UPDATE 
             SET content = EXCLUDED.content, created_at = NOW()
         """, (today, Json(report)))
-        
         conn.commit()
         cur.close()
         conn.close()
-        
         return report
     except Exception as e:
         print(f"AI Analysis trigger failed: {e}")
@@ -364,75 +426,44 @@ def trigger_ai_analysis(payload: AIAnalysisRequest):
 
 @app.get("/ai/latest")
 def get_latest_ai_report():
-    """Fetch the most recent AI report from DB"""
     try:
         conn = get_db_connection()
         cur = conn.cursor()
-        
         cur.execute("SELECT content FROM daily_reports ORDER BY date DESC LIMIT 1")
         row = cur.fetchone()
-        
         cur.close()
         conn.close()
-        
-        if row:
-            return row[0]
-        else:
-            return {"message": "No reports found"}
+        if row: return row[0]
+        else: return {"message": "No reports found"}
     except Exception as e:
-        print(f"Failed to fetch latest AI report: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-#=====원래 코드 +++
-# @app.get("/price/{ticker}")
-# def get_price(ticker: str):
-#     now = datetime.datetime.now().strftime("%Y%m%d")
-#     # pykrx로 실시간에 가까운 최신 종가 가져오기
-#     df = stock.get_market_ohlcv(now, now, ticker)
-    
-#     if df.empty: # 장 시작 전이나 휴일 대응
-#         prev_day = (datetime.datetime.now() - datetime.timedelta(days=5)).strftime("%Y%m%d")
-#         df = stock.get_market_ohlcv(prev_day, now, ticker)
-
-#     current_price = int(df['종가'].iloc[-1])
-#     return {"ticker": ticker, "price": current_price}
-
-# 실행: uvicorn stock_api:app --reload --port 8000
-
-# --- Watchlist Management ---
-
+# ==========================================
+# Watchlist Management
+# ==========================================
 class WatchlistAddRequest(BaseModel):
     ticker: str
     name: str
 
 def get_realtime_price(ticker):
-    """Helper to fetch current price for a ticker"""
     try:
         stock = yf.Ticker(ticker if not ticker.isdigit() else f"{ticker}.KS")
         data = stock.history(period="1d")
-        if not data.empty:
-            return round(data['Close'].iloc[-1], 2)
-    except:
-        pass
+        if not data.empty: return round(data['Close'].iloc[-1], 2)
+    except: pass
     return 0
 
 @app.get("/api/watchlist")
 def get_watchlist():
-    """Get the current watchlist with real-time prices"""
     conn = get_db_connection()
     cur = conn.cursor()
     try:
         cur.execute("SELECT ticker, name FROM watchlist ORDER BY created_at DESC")
         items = cur.fetchall()
-        
         result = []
         for ticker, name in items:
             price = get_realtime_price(ticker)
-            result.append({
-                "ticker": ticker,
-                "name": name,
-                "price": price
-            })
+            result.append({"ticker": ticker, "name": name, "price": price})
         return result
     finally:
         cur.close()
@@ -440,7 +471,6 @@ def get_watchlist():
 
 @app.post("/api/watchlist")
 def add_to_watchlist(payload: WatchlistAddRequest):
-    """Add a stock to the persistent watchlist"""
     conn = get_db_connection()
     cur = conn.cursor()
     try:
@@ -459,7 +489,6 @@ def add_to_watchlist(payload: WatchlistAddRequest):
 
 @app.delete("/api/watchlist/{ticker}")
 def remove_from_watchlist(ticker: str):
-    """Remove a stock from the persistent watchlist"""
     conn = get_db_connection()
     cur = conn.cursor()
     try:
@@ -472,5 +501,3 @@ def remove_from_watchlist(ticker: str):
     finally:
         cur.close()
         conn.close()
-
-
