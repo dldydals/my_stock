@@ -229,7 +229,7 @@ export default function StockTable({
                                                         <div className="flex items-center gap-2"><span className="text-blue-300 font-bold">30↓</span> <span>과매도 (매수 고려)</span></div>
                                                     </div>
                                                 }
-                                                overlayInnerStyle={{ backgroundColor: "rgba(0,0,0,0.85)", backdropFilter: "blur(4px)", border: "1px solid rgba(255,255,255,0.1)" }}
+                                                styles={{ body:{ backgroundColor: "rgba(0,0,0,0.85)", backdropFilter: "blur(4px)", border: "1px solid rgba(255,255,255,0.1)" }}}
                                             >
                                                 <Text style={{ fontSize: 10, color: "#94a3b8", cursor: "help", borderBottom: "1px dashed #64748b" }}>RSI(14)</Text>
                                             </Tooltip>

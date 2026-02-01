@@ -54,11 +54,6 @@ model CashAccount {
   @@map("cash_accounts")
 }
 
-enum TransactionType {
-  BUY
-  SELL
-}
-
 model DailyReport {
   id        Int      @id @default(autoincrement())
   date      DateTime @unique @default(now())
@@ -75,4 +70,31 @@ model Watchlist {
   createdAt DateTime @default(now()) @map("created_at")
 
   @@map("watchlist")
+}
+
+enum TransactionType {
+  BUY
+  SELL
+}
+
+// 기존 모델들 아래에 추가하세요
+
+model DailyStockPrice {
+  // 복합키 구성을 위해 ID는 따로 두지 않고 ticker와 date 조합을 사용합니다.
+  ticker    String   @db.VarChar(20)
+  date      DateTime @db.Date // 시간 없이 날짜만 저장
+  
+  open      Decimal  @db.Decimal(10, 2) // 시가
+  high      Decimal  @db.Decimal(10, 2) // 고가
+  low       Decimal  @db.Decimal(10, 2) // 저가
+  close     Decimal  @db.Decimal(10, 2) // 종가 (가장 중요)
+  volume    BigInt   // 거래량 (주식수는 21억 넘을 수 있으니 BigInt)
+  
+  // 보조 지표 (선택사항 - 미리 계산해서 넣고 싶다면)
+  change    Decimal? @db.Decimal(5, 2)  // 등락률
+
+  // 빠른 조회를 위한 인덱스 설정
+  @@id([ticker, date]) // [핵심] 같은 종목, 같은 날짜 중복 저장 원천 봉쇄
+  @@index([date])      // 날짜별 조회 속도 향상
+  @@map("daily_stock_prices") // 실제 DB 테이블 이름
 }

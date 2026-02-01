@@ -11,7 +11,6 @@ import TransactionDrawer from '../components/dashboard/TransactionDrawer';
 import PortfolioInsights from '../components/dashboard/PortfolioInsights';
 import AIReportCard from '../components/dashboard/AIReportCard';
 import WatchlistSection from '../components/dashboard/WatchlistSection';
-// ▼▼▼ [중요] 훅 import (경로 확인해주세요) ▼▼▼
 import { useStockData } from '../components/dashboard/useStockData';
 
 const { Title, Text } = Typography;
@@ -19,7 +18,7 @@ const { Title, Text } = Typography;
 export default function Home() {
   const { message } = App.useApp();
   
-  // ▼▼▼ [핵심] useStockData 훅을 사용하여 데이터와 로직을 한 번에 가져옵니다.
+  // 훅 데이터 가져오기
   const { 
     stockSummaries, 
     portfolioSummary, 
@@ -41,7 +40,10 @@ export default function Home() {
   const [aiReport, setAiReport] = useState<any>(null);
   const [aiLoading, setAiLoading] = useState(false);
 
-  // AI 리포트 가져오기 (이건 별도 API라 유지)
+  // ▼▼▼ [추가 1] 자동 실행 중복 방지용 플래그 ▼▼▼
+  const [hasAutoRefreshed, setHasAutoRefreshed] = useState(false);
+
+  // AI 리포트 가져오기 (초기 로딩용)
   const fetchAIReport = async () => {
     try {
       const res = await fetch('http://localhost:8000/ai/latest');
@@ -58,15 +60,17 @@ export default function Home() {
     fetchAIReport();
   }, []);
 
-  // AI 분석 트리거
+  // AI 분석 트리거 함수
   const triggerAIAnalysis = async () => {
     setAiLoading(true);
     try {
+      // 1. 관심 종목 가져오기
       const wlRes = await fetch('/api/watchlist');
       const wlData = await wlRes.json();
       const watchlist = wlData.map((w: any) => ({ name: w.name, code: w.ticker }));
 
-      const response = await fetch('http://localhost:8000/ai/analyze', {
+      // 2. Next.js API를 통해 파이썬 서버 호출
+      const response = await fetch('/api/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -74,10 +78,13 @@ export default function Home() {
           watchlist: watchlist
         }),
       });
+
       const result = await response.json();
       if (result.error) throw new Error(result.error);
+
+      // 3. 결과 상태 업데이트
       setAiReport(result);
-      message.success('새로운 AI 분석 리포트가 생성되었습니다.');
+      message.success('최신 시장 데이터로 AI 분석을 완료했습니다.');
     } catch (error) {
       console.error('AI Analysis failed:', error);
       message.error('AI 분석 생성에 실패했습니다.');
@@ -86,12 +93,33 @@ export default function Home() {
     }
   };
 
-  // 실시간 선택된 종목 데이터 트래킹 (훅 데이터 기반)
+  // ▼▼▼ [추가 2] 날짜 비교 후 자동 실행 로직 (핵심) ▼▼▼
+  useEffect(() => {
+    // 1. 데이터가 아직 준비 안 됐으면 대기 (보유 종목이 있어야 분석 가능)
+    if (stockSummaries.length === 0) return;
+    
+    // 2. 이미 자동 갱신을 시도했거나, 현재 분석 중이면 패스
+    if (hasAutoRefreshed || aiLoading) return;
+
+    // 3. 오늘 날짜와 리포트 날짜 비교
+    const today = dayjs().format('YYYY-MM-DD');
+    const reportDate = aiReport?.date; 
+
+    // 4. 리포트가 없거나, 날짜가 오늘이 아니면 -> 자동 분석 시작!
+    if (!reportDate || reportDate !== today) {
+        console.log(`📉 리포트 날짜(${reportDate || '없음'})가 오늘(${today})과 다릅니다. 자동 갱신 시작...`);
+        setHasAutoRefreshed(true); // "나 실행했어" 표시 (무한루프 방지)
+        triggerAIAnalysis();
+    }
+  }, [stockSummaries, aiReport, aiLoading, hasAutoRefreshed]); // 의존성 배열
+  // ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
+
+  // 실시간 선택된 종목 데이터 트래킹
   const latestSelectedStock = useMemo(() => 
     stockSummaries.find(h => h.code === selectedStock?.ticker) || selectedStock
   , [stockSummaries, selectedStock]);
 
-  // 파이 차트 데이터 생성 (훅 데이터 기반)
+  // 파이 차트 데이터 생성
   const pieData = useMemo(() => [
     ...stockSummaries.map(item => ({ type: item.name, value: item.currentAmount })),
     { type: '예수금', value: cashData.deposit },
@@ -111,17 +139,14 @@ export default function Home() {
   };
 
   const onTransactionSuccess = () => {
-    // 훅 내부 데이터는 자동 갱신되지만, 즉시 반영을 위해 페이지 리로드 혹은 로직 추가 가능
-    // 여기서는 간단히 선택된 종목 갱신 로직만 유지
     if (selectedStock) {
       handleRowClick(selectedStock);
     }
-    // 페이지 전체 데이터는 useStockData의 interval에 의해 갱신됨
-    window.location.reload(); // 가장 확실한 방법 (임시)
+    window.location.reload(); 
   };
 
   const handleCashUpdate = async (data: any) => {
-    await updateCash(data); // 훅의 함수 사용
+    await updateCash(data); 
     message.success('현금 자산이 업데이트되었습니다.');
   };
 
@@ -129,8 +154,6 @@ export default function Home() {
     try {
       const values = await newStockForm.validateFields();
       
-      // 훅의 addHolding 사용 또는 기존 API 호출 유지
-      // 트랜잭션 기록이 중요하므로 기존 API 호출 방식을 유지하되, 성공 후 훅 갱신 유도
       const res = await fetch('/api/transactions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -149,7 +172,6 @@ export default function Home() {
         message.success('신규 종목 매수가 등록되었습니다.');
         setNewStockModalOpen(false);
         newStockForm.resetFields();
-        // 데이터 갱신을 위해 리로드 (useStockData에 강제 리프레시 기능이 없다면)
         window.location.reload();
       } else {
         message.error('등록 중 오류가 발생했습니다.');
@@ -193,12 +215,11 @@ export default function Home() {
         <Col xs={24} lg={7}>
           <Space orientation="vertical" size={32} style={{ width: '100%' }}>
             <SummaryStats
-              totalAssets={portfolioSummary.totalCurrentAmount} // 훅 데이터 연결
+              totalAssets={portfolioSummary.totalCurrentAmount} 
               todayPnL={portfolioSummary.totalNetProfit}
               totalBuyAmount={portfolioSummary.totalBuyAmount}
               cashDeposit={cashData.deposit}
               cashCma={cashData.cma}
-              // ▼▼▼ [수정] 0 대신 실제 데이터를 연결합니다 ▼▼▼
               totalCumulativeDeposit={cashData.totalDeposit || 0}
               totalCumulativeWithdrawal={cashData.totalWithdrawal || 0}              
               onUpdateCash={handleCashUpdate}
@@ -239,7 +260,6 @@ export default function Home() {
           </div>
 
           <StockTable
-            // ▼▼▼ [핵심 수정] 훅 데이터를 Table 포맷으로 매핑하며 strategy 전달 ▼▼▼
             data={stockSummaries.map(s => ({
               key: s.code,
               ticker: s.code,
@@ -253,7 +273,7 @@ export default function Home() {
               allocation: portfolioSummary.totalCurrentAmount > 0 
                 ? (s.currentAmount / portfolioSummary.totalCurrentAmount) * 100 
                 : 0,
-              strategy: s.strategy // 👈 전략 데이터 필드 연결!
+              strategy: s.strategy
             }))}
             onRowClick={handleRowClick}
             aiReport={aiReport}

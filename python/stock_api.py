@@ -18,6 +18,9 @@ from io import StringIO
 from contextlib import asynccontextmanager
 from apscheduler.schedulers.background import BackgroundScheduler
 # ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
+# ▼▼▼ [추가할 코드] 데이터 수집기 import ▼▼▼
+import data_collector 
+# ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
 
 load_dotenv()
 
@@ -501,3 +504,53 @@ def remove_from_watchlist(ticker: str):
     finally:
         cur.close()
         conn.close()
+
+# ... (기존 AIAnalysisRequest 클래스 정의 아래에 추가) ...
+
+# ▼▼▼ [새로 추가할 핵심 엔드포인트] ▼▼▼
+@app.post("/analysis/report")
+def get_ai_report_with_collection(payload: AIAnalysisRequest):
+    try:
+        print(f"🔄 [System] 통합 분석 요청 수신")
+        
+        # 1. 요청 데이터 정리 (Pydantic 모델 -> 딕셔너리 리스트 변환)
+        holdings_list = [{"name": h.name, "code": h.code} for h in payload.holdings]
+        watchlist_list = [{"name": h.name, "code": h.code} for h in payload.watchlist]
+        all_targets = holdings_list + watchlist_list
+
+        # 2. [핵심] 분석 전 데이터 최신화 (DB가 비어있으면 AI가 멍청해짐 방지)
+        if all_targets:
+            print(f"📥 [Data Collector] {len(all_targets)}개 종목 데이터 최신화 시작...")
+            data_collector.fetch_and_save_data(all_targets)
+
+        # 3. AI 분석 실행 (이제 DB에 데이터가 꽉 차 있으므로 정확함)
+        print("🧠 [AI Analyst] 정밀 분석 시작...")
+        report = ai_analyst.generate_daily_report(holdings_list, watchlist_list)
+        
+        if "error" in report:
+            raise HTTPException(status_code=500, detail=report["error"])
+        
+        # 4. 결과 저장 (선택 사항: 나중에 '지난 리포트 보기' 기능을 위해)
+        # (기존 DB 저장 로직 재사용)
+        try:
+            conn = get_db_connection()
+            cur = conn.cursor()
+            today = datetime.now().date()
+            cur.execute("""
+                INSERT INTO daily_reports (date, content, created_at)
+                VALUES (%s, %s, NOW())
+                ON CONFLICT (date) DO UPDATE 
+                SET content = EXCLUDED.content, created_at = NOW()
+            """, (today, Json(report)))
+            conn.commit()
+            cur.close()
+            conn.close()
+        except Exception as db_e:
+            print(f"⚠️ 리포트 DB 저장 실패 (분석 결과는 정상 반환): {db_e}")
+
+        return report
+
+    except Exception as e:
+        print(f"❌ 통합 분석 실패: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+# ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲

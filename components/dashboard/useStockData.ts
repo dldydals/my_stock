@@ -1,8 +1,9 @@
 // components/dashboard/useStockData.ts
 
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { FEES } from "./constants";
 import { AnalyzedHolding, StockSummary, PortfolioSummary, MarketData, Holding, CashData } from "./types";
+import dayjs from 'dayjs'; 
 
 export function useStockData() {
   const [marketData, setMarketData] = useState<Record<string, MarketData>>({});
@@ -10,85 +11,71 @@ export function useStockData() {
   const [cashData, setCashData] = useState<CashData>({ 
     deposit: 0, 
     cma: 0, 
-      totalDeposit: 0, 
-      totalWithdrawal: 0 });
+    totalDeposit: 0, 
+    totalWithdrawal: 0 
+  });
   const [lastUpdate, setLastUpdate] = useState<string>("");
   const lastFetchDateRef = useRef<string>("");
 
-  // 1. 보유 주식 데이터 로드 (핵심 수정 적용됨)
-// 1. 보유 주식 데이터 로드
-  useEffect(() => {
-    const fetchHoldings = async () => {
-      try {
-        const res = await fetch('/api/holdings');
-        if (res.ok) {
-          const rawData = await res.json();
-          if (!rawData || rawData.length === 0) return;
+  // 1. 보유 주식 목록 가져오기 (함수 분리)
+  const fetchHoldings = useCallback(async () => {
+    try {
+      const res = await fetch('/api/holdings');
+      if (res.ok) {
+        const rawData = await res.json();
+        if (!rawData || rawData.length === 0) return;
 
-          const normalizedData = rawData
-            // ▼▼▼ [핵심] 현금성 자산은 주식 리스트에서 제외합니다! ▼▼▼
-            .filter((item: any) => {
-               // DB 컬럼명에 따라 item.name, item.asset_name 등 다를 수 있으니 안전하게 확인
-               const name = (item.name || item.asset_name || "").toUpperCase();
-               const ticker = (item.ticker || item.code || "").toUpperCase();
-               
-               // "예수금", "CMA", "현금", "KRW" 등이 포함된 항목은 제외 (false 반환)
-               const isCash = ["예수금", "CMA", "현금", "DEPOSIT", "KRW"].some(keyword => name.includes(keyword) || ticker.includes(keyword));
-               return !isCash; 
-            })
-            .map((item: any, index: number) => {
-                // ... (기존 매핑 로직 유지) ...
-                const foundTicker = item.ticker || item.code || item.symbol || item.asset_ticker || item.stock_code;
-                const foundPrice = item.avgPrice || item.avg_price || item.buyPrice || item.buy_price || item.price || 0;
+        const normalizedData = rawData
+          .filter((item: any) => {
+             const name = (item.name || item.asset_name || "").toUpperCase();
+             const ticker = (item.ticker || item.code || "").toUpperCase();
+             const isCash = ["예수금", "CMA", "현금", "DEPOSIT", "KRW"].some(keyword => name.includes(keyword) || ticker.includes(keyword));
+             return !isCash; 
+          })
+          .map((item: any, index: number) => {
+             const foundTicker = item.ticker || item.code || item.symbol || item.asset_ticker || item.stock_code;
+             const foundPrice = item.avgPrice || item.avg_price || item.buyPrice || item.buy_price || item.price || 0;
 
-                return {
-                  ...item,
-                  code: foundTicker || `UNKNOWN-${index}`,
-                  ticker: foundTicker || `UNKNOWN-${index}`,
-                  name: item.name || item.asset_name || "이름없음",
-                  quantity: Number(item.quantity || 0),
-                  buyPrice: Number(foundPrice),
-                  avgPrice: Number(foundPrice),
-                  currentPrice: Number(item.currentPrice || item.current_price || item.price || 0),
-                };
-            });
-          
-          setHoldings(normalizedData);
-        }
-      } catch (e) { console.error("Failed to fetch holdings", e); }
-    };
-    // ...
-    
-    // ... (fetchCash 등 나머지 코드는 건드리지 마세요) ...
-    const fetchCash = async () => {
-      try {
-        const res = await fetch('/api/cash');
-        if (res.ok) {
-          const data = await res.json();
-          setCashData(data);
-        }
-      } catch (e) { console.error("Failed to fetch cash", e); }
-    }
-
-    fetchHoldings();
-    fetchCash();
+             return {
+               ...item,
+               code: foundTicker || `UNKNOWN-${index}`,
+               ticker: foundTicker || `UNKNOWN-${index}`,
+               name: item.name || item.asset_name || "이름없음",
+               quantity: Number(item.quantity || 0),
+               buyPrice: Number(foundPrice),
+               avgPrice: Number(foundPrice),
+               currentPrice: Number(item.currentPrice || item.current_price || item.price || 0),
+             };
+          });
+        
+        setHoldings(normalizedData);
+      }
+    } catch (e) { console.error("Failed to fetch holdings", e); }
   }, []);
 
-  // 2. 시장 데이터 로드
-  useEffect(() => {
-    if (holdings.length === 0) return;
+  // 2. 현금 데이터 가져오기 (함수 분리)
+  const fetchCash = useCallback(async () => {
+    try {
+      const res = await fetch('/api/cash');
+      if (res.ok) {
+        const data = await res.json();
+        setCashData(data);
+      }
+    } catch (e) { console.error("Failed to fetch cash", e); }
+  }, []);
 
-    // ▼▼▼ 유효한 코드만 추출 (undefined 제거) ▼▼▼
+  // 3. 시장 데이터(가격/전략) 가져오기 (함수 분리)
+  const fetchAllDetails = useCallback(async (currentHoldings: Holding[]) => {
+    if (currentHoldings.length === 0) return;
+
     const uniqueCodes = Array.from(new Set(
-        holdings
+        currentHoldings
             .map((h) => h.code)
             .filter((code) => code && code !== "UNKNOWN")
     ));
 
-    // 2-1. 상세 정보 + 전략 정보 로드
-    const fetchAllDetails = async () => {
-      try {
-        // (1) 전략 데이터 로드 (Batch)
+    try {
+        // (1) 전략 데이터 로드
         const strategyRes = await fetch('http://127.0.0.1:8000/strategy/batch', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -110,7 +97,6 @@ export function useStockData() {
           const newData = { ...prev };
           results.forEach((data: any) => {
             if (data && data.ticker) {
-                // 전략 데이터가 있으면 합쳐줍니다.
                 const strategy = strategyData[data.ticker] || null;
                 newData[data.ticker] = { ...data, strategy };
             }
@@ -118,45 +104,65 @@ export function useStockData() {
           return newData;
         });
         lastFetchDateRef.current = new Date().toLocaleDateString();
-      } catch (e) { console.error(e); }
-    };
 
-    // 2-2. 현재가 업데이트
-    const fetchPricesOnly = async () => {
-      try {
-        const promises = uniqueCodes.map((code) => 
-            fetch(`http://127.0.0.1:8000/price/${code}`)
-                .then(res => res.ok ? res.json() : null)
-                .catch(() => null)
-        );
-        const results = await Promise.all(promises);
+    } catch (e) { console.error(e); }
+  }, []);
 
-        setMarketData((prev) => {
-          const nextState = { ...prev };
-          results.forEach((data: any) => {
-            if (data && data.ticker && nextState[data.ticker]) {
-              nextState[data.ticker] = {
-                ...nextState[data.ticker],
-                price: data.price,
-                change_rate: data.change_rate
-              };
-            }
-          });
-          setLastUpdate(new Date().toLocaleTimeString());
-          return nextState;
-        });
-      } catch (e) { console.error(e); }
-    };
+  // ▼▼▼ [핵심] 외부에서 호출 가능한 통합 데이터 갱신 함수 ▼▼▼
+  // 이 함수가 실행되면 모든 데이터를 새로 받고, 마지막에 시간을 찍습니다.
+  const fetchData = async () => {
+    console.log("🔄 데이터 동기화 중...");
+    await fetchHoldings(); // 목록 갱신
+    await fetchCash();     // 현금 갱신
+    
+    // holdings 상태가 업데이트 되기 전이라도, 기존 holdings가 있다면 가격 갱신 시도
+    if (holdings.length > 0) {
+        await fetchAllDetails(holdings);
+    }
 
-    fetchAllDetails();
+    // ★★★ 여기가 제일 중요! 데이터 수신 완료 시점에 시간 기록 ★★★
+    setLastUpdate(dayjs().format('YYYY-MM-DD HH:mm:ss'));
+  };
+
+  // 초기 로딩 (컴포넌트 마운트 시 실행)
+  useEffect(() => {
+    fetchData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); 
+
+  // holdings가 변하면 시장 데이터 자동 갱신
+  useEffect(() => {
+    if (holdings.length > 0) {
+        fetchAllDetails(holdings);
+    }
+  }, [holdings, fetchAllDetails]);
+
+  // 주기적 갱신 (10초마다)
+// ... 기존 코드들 ...
+
+  // [수정 전] fetchAllDetails만 불러서 시간이 안 바뀌었음
+  /*
+  useEffect(() => {
     const interval = setInterval(() => {
-        // 10초마다 갱신 (단순화)
-        fetchAllDetails();
+        if (holdings.length > 0) fetchAllDetails(holdings);
     }, 10000);
-
     return () => clearInterval(interval);
-  }, [holdings]);
+  }, [holdings, fetchAllDetails]);
+  */
 
+  // ▼▼▼ [수정 후] fetchData를 불러서 시간(lastUpdate)까지 갱신! ▼▼▼
+  useEffect(() => {
+    // 1. 30초(30000ms) 마다 실행
+    const interval = setInterval(() => {
+        //console.log("⏰ 30초 자동 갱신 실행 중...");
+        fetchData(); 
+    }, 30000);
+
+    // 2. 청소(Cleanup)
+    return () => clearInterval(interval);
+  }, [fetchData]); // fetchData가 바뀔 때만 재설정
+
+  // ... 리턴 문 ...
 
   // --- 계산 로직 (기존 유지) ---
   const analyzedHoldings: AnalyzedHolding[] = useMemo(() => {
@@ -190,7 +196,7 @@ export function useStockData() {
         per: marketInfo?.per,
         pbr: marketInfo?.pbr,
         dividend_yield: marketInfo?.dividend_yield,
-        strategy: marketInfo?.strategy // 여기서 전략 연결
+        strategy: marketInfo?.strategy
       };
     });
   }, [holdings, marketData]);
@@ -216,7 +222,7 @@ export function useStockData() {
       stock.buyAmount += item.buyAmount;
       stock.currentAmount += item.currentAmount;
       stock.totalFees += item.totalFees;
-      stock.currentPrice = item.currentPrice; // 최신 가격 덮어쓰기
+      stock.currentPrice = item.currentPrice;
       stock.change_rate = item.change_rate;
       if (item.strategy) stock.strategy = item.strategy;
     });
@@ -231,44 +237,29 @@ export function useStockData() {
     });
   }, [analyzedHoldings]);
 
-  // ... (analyzedHoldings 로직 유지) ...
-
   const portfolioSummary: PortfolioSummary = useMemo(() => {
-    // 1. 순수 주식 평가금액 합계 (현금 제외)
     let stockSum = 0;
     analyzedHoldings.forEach((item) => {
         stockSum += item.currentAmount;
     });
 
-    // 2. 현금 합계
     const cashSum = (cashData.deposit || 0) + (cashData.cma || 0);
-
-    // 3. 리턴값 구성
     const totalBuyAmount = analyzedHoldings.reduce((sum, item) => sum + item.buyAmount, 0);
-    
-    // 순수 주식 손익 (주식평가금 - 주식매수금 - 수수료)
     const totalNetProfit = analyzedHoldings.reduce((sum, item) => sum + item.netProfit, 0);
-    
-    // 수익률 계산
     const totalReturnRate = totalBuyAmount > 0 ? ((totalNetProfit / totalBuyAmount) * 100).toFixed(2) : "0.00";
     
     return { 
         totalBuyAmount, 
-        
-        // ▼▼▼ [수정됨] 여기에 현금을 더하지 않고 '순수 주식 총액'만 보냅니다. ▼▼▼
-        // (화면 컴포넌트인 SummaryStats가 알아서 현금을 더해서 보여줄 겁니다)
         totalCurrentAmount: stockSum, 
-        
         totalNetProfit, 
         totalReturnRate, 
         totalCash: cashSum 
     };
   }, [analyzedHoldings, cashData]);
 
-
   // Action Handlers
-  const addHolding = async (holding: any) => {}; // 필요시 구현
-  const removeHolding = async (id: number) => {}; // 필요시 구현
+  const addHolding = async (holding: any) => {}; 
+  const removeHolding = async (id: number) => {}; 
   const updateCash = async (newItem: CashData) => {
     try {
         await fetch("/api/cash", {
@@ -280,5 +271,16 @@ export function useStockData() {
     } catch(e) {}
   };
 
-  return { analyzedHoldings, stockSummaries, portfolioSummary, addHolding, removeHolding, cashData, updateCash, lastUpdate };
+  // ▼▼▼ [핵심] fetchData를 리턴 객체에 포함시켜 외부에서 쓸 수 있게 합니다 ▼▼▼
+  return { 
+    analyzedHoldings, 
+    stockSummaries, 
+    portfolioSummary, 
+    addHolding, 
+    removeHolding, 
+    cashData, 
+    updateCash, 
+    lastUpdate, 
+    fetchData // 👈 이제 page.tsx에서 이 함수를 부르면 시간도 갱신됩니다!
+  };
 }
