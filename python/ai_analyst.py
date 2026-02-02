@@ -1,143 +1,143 @@
-import sys
 import os
-import warnings
-
-# 현재 폴더 경로 추가 (안전장치)
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-
-# 경고 메시지 끄기
-warnings.filterwarnings("ignore", category=FutureWarning)
-warnings.filterwarnings("ignore", category=UserWarning)
-
 import json
-import re
-from dotenv import load_dotenv
+import requests
 import google.generativeai as genai
-
-# 우리가 만든 모듈 가져오기 (핵심!)
-import analyzer
-import data_collector
-
+from datetime import datetime
+from dotenv import load_dotenv
 
 # 환경 변수 로드
 load_dotenv()
-GEMINI_API_KEY = os.environ.get("GOOGLE_API_KEY")
-
-if GEMINI_API_KEY:
-    genai.configure(api_key=GEMINI_API_KEY)
 
 class AIAnalyst:
     def __init__(self):
-        #self.model = genai.GenerativeModel('gemini-flash-latest') # 또는 gemini-1.5-flash
-        self.model = genai.GenerativeModel('gemini-1.5-flash')
-
-    def _get_market_summary(self):
-        """시장 지수(나스닥, 환율)의 기술적 분석 현황을 가져옵니다."""
-        indices = {
-            "나스닥": "^IXIC",
-            "원달러환율": "KRW=X"
-        }
-        summary_text = ""
-        for name, ticker in indices.items():
-            data = analyzer.get_technical_summary(ticker)
-            if data:
-                summary_text += f"- {name}: RSI {data['rsi']} ({data['rsi_status']}), 추세: {data['sma_status']}\n"
-        return summary_text
-
-    def generate_daily_report(self, holdings_info, watchlist_info):
-        """
-        보유/관심 종목에 대해 DB 기반 정밀 분석 리포트를 생성합니다.
-        """
-        if not GEMINI_API_KEY:
-            return {"error": "GOOGLE_API_KEY가 없습니다."}
-
-        print("🧠 AI 분석 시작 (DB 데이터 기반)...")
-
-        # 1. AI에게 보낼 종목별 분석 데이터 취합
-        # analyzer.create_ai_prompt()를 사용하여 "이미 계산된" 정보를 가져옵니다.
+        # 1. API 키 확인
+        api_key = os.environ.get("GOOGLE_API_KEY") or os.environ.get("GEMINI_API_KEY")
+        if not api_key:
+            print("⚠️ [AI Init] API Key가 없습니다. .env 파일을 확인하세요.")
+            return
         
-        holdings_prompts = []
-        for stock in holdings_info:
-            report = analyzer.create_ai_prompt(stock['code'])
-            holdings_prompts.append(f"--- [보유 종목: {stock['name']}] ---\n{report}")
+        genai.configure(api_key=api_key)
 
-        watchlist_prompts = []
-        for stock in watchlist_info:
-            report = analyzer.create_ai_prompt(stock['code'])
-            watchlist_prompts.append(f"--- [관심 종목: {stock['name']}] ---\n{report}")
+        # 2. [핵심] AI에게 "2026년 현재 상황"과 "가격 신뢰"를 강제하는 시스템 프롬프트
+        system_instruction = """
+You are a professional stock trader (Quant) in **February 2026**.
+Your goal is to provide a JSON daily strategy report.
 
-        # 시장 요약 가져오기
-        market_summary = self._get_market_summary()
+[CRITICAL RULES]
+1. **Trust Input Price**: The 'Current Price' provided in the user prompt is the **ABSOLUTE TRUTH**. 
+   - Even if your memory says "SK Square is 80,000 KRW", you MUST accept the input price (e.g., 525,000 KRW) as fact.
+   - Calculate Target Price (+2~5%) and Stop Loss (-2~3%) based on the **Input Price**.
+2. **Analysis Logic**:
+   - RSI < 30: Buy Signal (Oversold).
+   - RSI > 70: Sell Signal (Overbought).
+3. **Output Format**: Return ONLY valid JSON. No Markdown.
 
-        # 2. 최종 프롬프트 조립
-        final_prompt = f"""
-        당신은 최고의 승률을 자랑하는 **'단기 스윙 트레이더'**입니다.
-        아래 제공된 **'기술적 분석 리포트(RSI, 이평선)'**와 **'최근 30일 차트 패턴'**을 보고 매매 전략을 수립하세요.
-        
-        [시장 현황]
-        {market_summary}
-
-        [분석 대상 데이터]
-        {''.join(holdings_prompts)}
-        {''.join(watchlist_prompts)}
-
-        [💥 분석 가이드라인 - 엄격 준수]
-        1. **데이터 신뢰**: 제공된 RSI 값과 이평선 배열 상태는 정확한 수치이므로 이를 근거로 판단하세요.
-        2. **가격 산정**: 
-           - **buy_price**: 최근 30일 차트의 '지지선' 가격을 찾아 정수로 제시 (눌림목 타점).
-           - **target_price**: 저항선 가격.
-           - **stop_loss**: 지지 라인 이탈 가격.
-        3. **차트 패턴**: 최근 30일 데이터 표를 보고 '쌍바닥', '박스권 돌파', '하락 추세' 등의 패턴을 읽어내세요.
-
-        [출력 형식 (JSON Only)]
-        반드시 아래 JSON 형식으로만 응답하세요.
-        {{
-          "market_summary": "시장 요약 멘트...",
-          "daily_advice": "오늘의 전체적인 대응 전략...",
-          "holdings_analysis": [
-            {{
-              "name": "종목명",
-              "outlook": "단기매수/홀딩/매도/관망",
-              "analysis": "분석 내용 (RSI 30에서 반등 시도 등)...",
-              "buy_price": 0,
-              "target_price": 0,
-              "stop_loss": 0
-            }}
-          ],
-          "watchlist_analysis": [
-            ... 위와 동일 구조 ...
-          ]
-        }}
-        """
-
-        # 3. Gemini에게 요청 전송
+[JSON Structure]
+{
+  "date": "YYYY-MM-DD",
+  "daily_advice": "Market summary in Korean",
+  "holdings_analysis": [
+    {
+      "name": "Stock Name",
+      "code": "Ticker",
+      "current_price": 12345,
+      "outlook": "긍정/중립/부정",
+      "analysis": "Reason in Korean",
+      "strategy": "BUY/SELL/HOLD",
+      "buy_price": 12000,
+      "target_price": 13000,
+      "stop_loss": 11000
+    }
+  ],
+  "watchlist_analysis": [ ...same... ]
+}
+"""
+        # 3. 모델 초기화 (Gemini 1.5 Flash 사용)
         try:
-            print("🚀 Gemini에게 리포트 요청 전송 중...")
-            response = self.model.generate_content(final_prompt)
-            
-            # JSON 추출 (Markdown 코드 블록 제거)
+            self.model = genai.GenerativeModel(
+                'gemini-1.5-flash',
+                system_instruction=system_instruction
+            )
+            print("🤖 [AI Init] Gemini 1.5 Flash 모델 로드 완료 (System Instruction 적용됨)")
+        except Exception as e:
+            print(f"❌ [AI Init] 모델 초기화 실패: {e}")
+
+    def _fetch_realtime_price(self, ticker):
+        """AI에게 알려줄 '진짜 가격'을 네이버에서 직접 가져옵니다."""
+        try:
+            url = f"https://m.stock.naver.com/api/stock/{ticker}/basic"
+            res = requests.get(url, headers={'User-Agent': 'Mozilla/5.0'}, timeout=2)
+            data = res.json()
+            if 'closePrice' in data:
+                return int(data['closePrice'].replace(',', ''))
+        except:
+            pass
+        return 0
+
+    def generate_daily_report(self, holdings_list, watchlist_list):
+        """
+        [수정됨] 텍스트가 아닌 'JSON 데이터' 형태로 질문하여 
+        AI가 종목을 헷갈리는(정보 섞임) 현상을 원천 차단합니다.
+        """
+        if not hasattr(self, 'model'):
+            return {"error": "AI Model not initialized"}
+
+        print("🧠 [AI Analyst] 데이터 구조화 및 분석 요청 중...")
+
+        # 1. AI에게 보낼 데이터를 '리스트'로 깔끔하게 정리
+        input_data = {
+            "date": datetime.now().strftime("%Y-%m-%d"),
+            "task": "Analyze these stocks based on the provided 'current_price'.",
+            "stocks": []
+        }
+
+        # 보유 종목 데이터화
+        for h in holdings_list:
+            price = self._fetch_realtime_price(h['code'])
+            input_data["stocks"].append({
+                "category": "HOLDING",
+                "name": h['name'],
+                "code": h['code'],
+                "current_price": price # 실시간 가격
+            })
+
+        # 관심 종목 데이터화
+        for w in watchlist_list:
+            price = self._fetch_realtime_price(w['code'])
+            input_data["stocks"].append({
+                "category": "WATCHLIST",
+                "name": w['name'],
+                "code": w['code'],
+                "current_price": price # 실시간 가격
+            })
+
+        # 2. 프롬프트 작성 (JSON을 문자열로 변환해서 던짐)
+        # 이렇게 하면 AI가 "아, 이건 데이터구나" 하고 정확하게 인식합니다.
+        prompt_text = f"""
+[DATA_TO_ANALYZE]
+{json.dumps(input_data, ensure_ascii=False, indent=2)}
+
+[INSTRUCTION]
+1. Analyze each stock in the 'stocks' list individually.
+2. **DO NOT MIX UP DATA.** The analysis for 'SK Square' must use 'SK Square's price.
+3. Return the result in the standard JSON format defined in the system instruction.
+"""
+
+        # 3. AI 호출
+        try:
+            response = self.model.generate_content(prompt_text)
             text = response.text.strip()
-            # 정규식으로 { ... } 구간만 추출하여 파싱 에러 방지
-            json_match = re.search(r'(\{.*\})', text, re.DOTALL)
             
-            if json_match:
-                clean_json = json_match.group(1)
-                return json.loads(clean_json)
-            else:
-                # 정규식 실패 시 단순 제거 시도
-                clean_text = text.replace('```json', '').replace('```', '').strip()
-                return json.loads(clean_text)
+            if text.startswith("```json"): text = text[7:]
+            if text.endswith("```"): text = text[:-3]
+            
+            return json.loads(text)
 
         except Exception as e:
-            print(f"❌ AI 분석 실패: {e}")
-            return {"error": str(e)}
-
-# 테스트 실행
-if __name__ == "__main__":
-    analyst = AIAnalyst()
-    # 테스트용 데이터 (실제로는 프론트엔드에서 옴)
-    h = [{"name": "SK스퀘어", "code": "402340"}]
-    w = [{"name": "나스닥", "code": "^IXIC"}] # 테스트용
-    
-    result = analyst.generate_daily_report(h, w)
-    print(json.dumps(result, ensure_ascii=False, indent=2))
+            print(f"⚠️ [AI Error] {e}")
+            return {
+                "date": datetime.now().strftime("%Y-%m-%d"),
+                "daily_advice": "분석 중 오류 발생",
+                "holdings_analysis": [],
+                "error": str(e)
+            }
