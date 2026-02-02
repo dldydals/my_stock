@@ -28,7 +28,8 @@ if GEMINI_API_KEY:
 
 class AIAnalyst:
     def __init__(self):
-        self.model = genai.GenerativeModel('gemini-flash-latest') # 또는 gemini-1.5-flash
+        #self.model = genai.GenerativeModel('gemini-flash-latest') # 또는 gemini-1.5-flash
+        self.model = genai.GenerativeModel('gemini-1.5-flash')
 
     def _get_market_summary(self):
         """시장 지수(나스닥, 환율)의 기술적 분석 현황을 가져옵니다."""

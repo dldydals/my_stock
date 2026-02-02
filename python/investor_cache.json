@@ -1,0 +1,92 @@
+{
+    "105560": {
+        "foreigner": 82060,
+        "institution": -129790,
+        "individual": 47730,
+        "date_str": "Close(01.30)"
+    },
+    "326030": {
+        "foreigner": -4675,
+        "institution": -29929,
+        "individual": 34604,
+        "date_str": "Close(01.30)"
+    },
+    "011000": {
+        "foreigner": -135726,
+        "institution": -529,
+        "individual": 136255,
+        "date_str": "Close(01.30)"
+    },
+    "005385": {
+        "foreigner": -41868,
+        "institution": -24818,
+        "individual": 66686,
+        "date_str": "Close(01.30)"
+    },
+    "402340": {
+        "foreigner": -68885,
+        "institution": 37634,
+        "individual": 31251,
+        "date_str": "Close(01.30)"
+    },
+    "035720": {
+        "foreigner": 416418,
+        "institution": 25764,
+        "individual": -442182,
+        "date_str": "Close(01.30)"
+    },
+    "042660": {
+        "foreigner": -232287,
+        "institution": -156365,
+        "individual": 388652,
+        "date_str": "Close(01.30)"
+    },
+    "006400": {
+        "foreigner": -33143,
+        "institution": -98403,
+        "individual": 131546,
+        "date_str": "Close(01.30)"
+    },
+    "102110": {
+        "foreigner": -867,
+        "institution": -236409,
+        "individual": 237276,
+        "date_str": "Close(01.30)"
+    },
+    "005935": {
+        "foreigner": 214573,
+        "institution": 210336,
+        "individual": -424909,
+        "date_str": "Close(01.30)"
+    },
+    "069080": {
+        "foreigner": -73933,
+        "institution": 105233,
+        "individual": -31300,
+        "date_str": "Close(01.30)"
+    },
+    "034220": {
+        "foreigner": -463671,
+        "institution": -36588,
+        "individual": 500259,
+        "date_str": "Close(01.30)"
+    },
+    "068760": {
+        "foreigner": 6272,
+        "institution": 120272,
+        "individual": -126544,
+        "date_str": "Close(01.30)"
+    },
+    "012330": {
+        "foreigner": 22073,
+        "institution": 8861,
+        "individual": -30934,
+        "date_str": "Close(01.30)"
+    },
+    "045390": {
+        "foreigner": 28177,
+        "institution": 0,
+        "individual": -28177,
+        "date_str": "Close(01.30)"
+    }
+}
