@@ -342,6 +342,74 @@ export default function StockTable({
                   </div>
                 </div>
               </div>
+              {/* Row 2: 보유수량 | 평균단가 | 매입금액 */}
+            <div className="grid grid-cols-3 gap-2 mb-4 bg-black/20 p-3 rounded-xl border border-white/5 relative z-10">
+              
+              {/* 1. 보유수량 (Left) */}
+              <div className="flex flex-col items-start">
+                <Text
+                  type="secondary"
+                  style={{ fontSize: 9, fontWeight: 600, color: "#cbd5e1" }}
+                >
+                  보유수량
+                </Text>
+                <Text
+                  className="font-numeric"
+                  style={{
+                    fontSize: 13,
+                    fontWeight: 700,
+                    color: "var(--foreground)",
+                  }}
+                >
+                  {item.quantity.toLocaleString()}{" "}
+                  <small className="ml-0.5 opacity-50 font-normal">주</small>
+                </Text>
+              </div>
+
+              {/* 2. 평균단가 (Center) */}
+              <div className="flex flex-col items-center border-l border-r border-white/5">
+                <Text
+                  type="secondary"
+                  style={{ fontSize: 9, fontWeight: 600, color: "#cbd5e1" }}
+                >
+                  평균단가
+                </Text>
+                <Text
+                  className="font-numeric"
+                  style={{
+                    fontSize: 13,
+                    fontWeight: 600,
+                    color: "var(--foreground)",
+                    opacity: 0.8,
+                  }}
+                >
+                  {Math.round(item.avgPrice).toLocaleString()}
+                </Text>
+              </div>
+
+              {/* 3. 매입금액 (Right) - [NEW] */}
+              <div className="flex flex-col items-end">
+                <Text
+                  type="secondary"
+                  style={{ fontSize: 9, fontWeight: 600, color: "#cbd5e1" }}
+                >
+                  매입금액
+                </Text>
+                <Text
+                  className="font-numeric"
+                  style={{
+                    fontSize: 13,
+                    fontWeight: 700,
+                    color: "var(--foreground)", // 혹은 강조색 사용 가능
+                  }}
+                >
+                  {Math.round(item.quantity * item.avgPrice).toLocaleString()}{" "}
+                  <small className="ml-0.5 opacity-50 font-normal text-[9px]">
+                    원
+                  </small>
+                </Text>
+              </div>
+            </div>
 
               {/* ▼▼▼ [수정된 부분] 수급 정보 삭제 & 컴팩트 전략 박스 적용 ▼▼▼ */}
               {strat && (
@@ -432,50 +500,7 @@ export default function StockTable({
               )}
               {/* ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲ */}
 
-              {/* Row 2: 보유수량 & 평균단가 (원래 위치로 복구) */}
-              <div className="flex justify-between items-center mb-4 bg-black/20 p-3 rounded-xl border border-white/5 relative z-10">
-                <div className="flex flex-col">
-                  <Text
-                    type="secondary"
-                    style={{ fontSize: 9, fontWeight: 600, color: "#cbd5e1" }}
-                  >
-                    보유수량
-                  </Text>
-                  <Text
-                    className="font-numeric"
-                    style={{
-                      fontSize: 13,
-                      fontWeight: 700,
-                      color: "var(--foreground)",
-                    }}
-                  >
-                    {item.quantity.toLocaleString()}{" "}
-                    <small className="ml-0.5 opacity-50 font-normal">주</small>
-                  </Text>
-                </div>
-                <div className="flex flex-col items-end">
-                  <Text
-                    type="secondary"
-                    style={{ fontSize: 9, fontWeight: 600, color: "#cbd5e1" }}
-                  >
-                    평균단가
-                  </Text>
-                  <Text
-                    className="font-numeric"
-                    style={{
-                      fontSize: 13,
-                      fontWeight: 600,
-                      color: "var(--foreground)",
-                      opacity: 0.8,
-                    }}
-                  >
-                    {Math.round(item.avgPrice).toLocaleString()}{" "}
-                    <small className="ml-0.5 opacity-50 font-normal text-[9px]">
-                      원
-                    </small>
-                  </Text>
-                </div>
-              </div>
+            
 
               {/* Footer: Allocation */}
               <div className="pt-2 relative z-10 border-t border-white/10">
