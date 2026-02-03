@@ -1,92 +1,92 @@
 {
     "105560": {
-        "foreigner": 82060,
-        "institution": -129790,
-        "individual": 47730,
-        "date_str": "Close(01.30)"
+        "foreigner": 15894,
+        "institution": -127391,
+        "individual": 111497,
+        "date_str": "Close(02.02)"
     },
     "326030": {
-        "foreigner": -4675,
-        "institution": -29929,
-        "individual": 34604,
-        "date_str": "Close(01.30)"
+        "foreigner": -11679,
+        "institution": -47993,
+        "individual": 59672,
+        "date_str": "Close(02.02)"
     },
     "011000": {
-        "foreigner": -135726,
-        "institution": -529,
-        "individual": 136255,
-        "date_str": "Close(01.30)"
+        "foreigner": -517433,
+        "institution": 8,
+        "individual": 517425,
+        "date_str": "Close(02.02)"
     },
     "005385": {
-        "foreigner": -41868,
-        "institution": -24818,
-        "individual": 66686,
-        "date_str": "Close(01.30)"
+        "foreigner": 27987,
+        "institution": -26155,
+        "individual": -1832,
+        "date_str": "Close(02.02)"
     },
     "402340": {
-        "foreigner": -68885,
-        "institution": 37634,
-        "individual": 31251,
-        "date_str": "Close(01.30)"
+        "foreigner": -277725,
+        "institution": 56921,
+        "individual": 220804,
+        "date_str": "Close(02.02)"
     },
     "035720": {
-        "foreigner": 416418,
-        "institution": 25764,
-        "individual": -442182,
-        "date_str": "Close(01.30)"
+        "foreigner": -231218,
+        "institution": -370703,
+        "individual": 601921,
+        "date_str": "Close(02.02)"
     },
     "042660": {
-        "foreigner": -232287,
-        "institution": -156365,
-        "individual": 388652,
-        "date_str": "Close(01.30)"
+        "foreigner": 223947,
+        "institution": -115655,
+        "individual": -108292,
+        "date_str": "Close(02.02)"
     },
     "006400": {
-        "foreigner": -33143,
-        "institution": -98403,
-        "individual": 131546,
-        "date_str": "Close(01.30)"
+        "foreigner": -5681,
+        "institution": -353562,
+        "individual": 359243,
+        "date_str": "Close(02.02)"
     },
     "102110": {
-        "foreigner": -867,
-        "institution": -236409,
-        "individual": 237276,
-        "date_str": "Close(01.30)"
+        "foreigner": -30563,
+        "institution": -124446,
+        "individual": 155009,
+        "date_str": "Close(02.02)"
     },
     "005935": {
-        "foreigner": 214573,
-        "institution": 210336,
-        "individual": -424909,
-        "date_str": "Close(01.30)"
+        "foreigner": -277966,
+        "institution": 16421,
+        "individual": 261545,
+        "date_str": "Close(02.02)"
     },
     "069080": {
-        "foreigner": -73933,
-        "institution": 105233,
-        "individual": -31300,
-        "date_str": "Close(01.30)"
+        "foreigner": -10992,
+        "institution": -60346,
+        "individual": 71338,
+        "date_str": "Close(02.02)"
     },
     "034220": {
-        "foreigner": -463671,
-        "institution": -36588,
-        "individual": 500259,
-        "date_str": "Close(01.30)"
+        "foreigner": -481638,
+        "institution": -872597,
+        "individual": 1354235,
+        "date_str": "Close(02.02)"
     },
     "068760": {
-        "foreigner": 6272,
-        "institution": 120272,
-        "individual": -126544,
-        "date_str": "Close(01.30)"
+        "foreigner": 61839,
+        "institution": -54721,
+        "individual": -7118,
+        "date_str": "Close(02.02)"
     },
     "012330": {
-        "foreigner": 22073,
-        "institution": 8861,
-        "individual": -30934,
-        "date_str": "Close(01.30)"
+        "foreigner": 66740,
+        "institution": -44447,
+        "individual": -22293,
+        "date_str": "Close(02.02)"
     },
     "045390": {
-        "foreigner": 28177,
+        "foreigner": -282,
         "institution": 0,
-        "individual": -28177,
-        "date_str": "Close(01.30)"
+        "individual": 282,
+        "date_str": "Close(02.02)"
     }
 }

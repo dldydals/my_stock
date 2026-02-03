@@ -33,6 +33,9 @@ load_dotenv()
 # =========================================================
 CACHE_FILE = "investor_cache.json"
 INVESTOR_CACHE = {}
+# ▼▼▼ [추가] 마지막 데이터 갱신 시간을 저장할 전역 변수 ▼▼▼
+LAST_UPDATE_TIME = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+# ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
 
 def load_cache():
     global INVESTOR_CACHE
@@ -76,6 +79,9 @@ def get_realtime_price_naver(ticker):
 
 def update_all_investor_data():
     """스케줄러 잡: DB에 있는 모든 종목의 수급 데이터 갱신"""
+    # ▼▼▼ [추가] 전역 변수 사용 선언 ▼▼▼
+    global LAST_UPDATE_TIME
+    # ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
     target_tickers = set()
     try:
         conn = get_db_connection()
@@ -103,19 +109,38 @@ def update_all_investor_data():
             
     if updated: 
         save_cache()
-        print("✅ [Scheduler] 수급 데이터 갱신 완료 및 저장")
+        LAST_UPDATE_TIME = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        print(f"✅ [Scheduler] 수급 데이터 갱신 완료 ({LAST_UPDATE_TIME})")
 
 # =========================================================
 # 🚀 [Lifespan] 서버 시작/종료 관리
 # =========================================================
+# python/stock_api.py 하단
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # 1. 서버 켜질 때 캐시 파일 로드
     load_cache()
+    
+    # 2. 스케줄러 설정
     scheduler = BackgroundScheduler()
-    scheduler.add_job(update_all_investor_data, 'interval', minutes=10)
+    
+    # ▼▼▼ [수정] 수급 데이터는 '1시간'에 한 번만 긁어오게 변경! ▼▼▼
+    # (기존 minutes=10 또는 0.5 등을 -> minutes=60 으로 변경)
+    scheduler.add_job(update_all_investor_data, 'interval', minutes=60)
+    
+    # 참고: 장중에만 돌게 하려면 아래처럼 'cron' 방식을 써도 됩니다. (선택사항)
+    # scheduler.add_job(update_all_investor_data, 'cron', day_of_week='mon-fri', hour='9-15', minute='35')
+    
     scheduler.start()
-    scheduler.add_job(update_all_investor_data) # 시작하자마자 한 번 실행
+    
+    # 3. 서버 시작 시점에 한 번은 긁어오기 (이건 유지)
+    print("🚀 [System] 서버 시작: 초기 데이터 수집 시작...")
+    scheduler.add_job(update_all_investor_data) 
+    
     yield
+    
+    # 서버 꺼질 때 저장
     scheduler.shutdown()
 
 app = FastAPI(lifespan=lifespan)
@@ -170,6 +195,76 @@ def get_stock_price(ticker: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
+# =========================================================
+# 📋 [Endpoint] 통합 주식 목록 + 갱신 시간 (New!)
+# =========================================================
+@app.get("/stocks")
+def get_stocks_combined():
+    """
+    관심종목(Watchlist)과 보유종목(Holdings)을 합쳐서 반환하고,
+    마지막 데이터 갱신 시간(last_updated)을 함께 줍니다.
+    """
+    conn = get_db_connection()
+    cur = conn.cursor()
+    try:
+        # 1. Watchlist와 Holdings에서 모든 종목 가져오기 (중복 제거)
+        # (혹시 holdings 테이블이 없다면 watchlist만 조회하도록 수정하세요)
+        query = """
+            SELECT ticker, name FROM watchlist
+            UNION 
+            SELECT ticker, name FROM holdings
+        """
+        try:
+            cur.execute(query)
+        except:
+            # holdings 테이블이 없어서 에러나면 watchlist만 조회
+            conn.rollback()
+            cur.execute("SELECT ticker, name FROM watchlist")
+            
+        rows = cur.fetchall()
+        
+        stocks_list = []
+        for ticker, name in rows:
+            # A. 현재가 (실시간)
+            price_data = get_realtime_price_naver(ticker)
+            current_price = price_data['price'] if price_data else 0
+            change_rate = price_data['change_rate'] if price_data else 0.0
+            
+            # B. 수급 데이터 (캐시에서 가져옴)
+            investor_data = INVESTOR_CACHE.get(ticker, {})
+            
+            # C. 데이터 합치기
+            stock_obj = {
+                "ticker": ticker,
+                "name": name,
+                "currentPrice": current_price,
+                "changeRate": change_rate,
+                "quantity": 1, # 보유수량은 일단 1로 가정 (필요시 DB 조인)
+                "strategy": {
+                    "rsi": 0, # 필요시 계산
+                    "foreigner": investor_data.get('foreigner', 0),
+                    "institution": investor_data.get('institution', 0),
+                    "individual": investor_data.get('individual', 0),
+                }
+            }
+            stocks_list.append(stock_obj)
+
+        print(f"📤 [API] 통합 주식 목록 반환 (Time: {LAST_UPDATE_TIME})")
+        
+        # 2. 리스트와 시간을 묶어서 반환!
+        return {
+            "stocks": stocks_list,
+            "last_updated": LAST_UPDATE_TIME
+        }
+
+    except Exception as e:
+        print(f"❌ 목록 조회 실패: {e}")
+        return {"stocks": [], "last_updated": "Error"}
+    finally:
+        cur.close()
+        conn.close()
+
 # =========================================================
 # 🧠 [Core Logic] 전략 분석 (Lazy Load + Pykrx Fix)
 # =========================================================
@@ -195,60 +290,127 @@ def calculate_rsi(df, period=14):
 
 def get_investor_from_naver_api(ticker: str):
     """
-    [Final] HTML 직접 파싱 방식 + 개인 수급 역산
+    [Smart Parse] 컬럼 위치가 아니라 '이름(Header)'으로 데이터를 찾습니다.
+    엉뚱한 숫자(-7 등)를 가져오는 문제를 방지합니다.
     """
     try:
         url = f"https://finance.naver.com/item/frgn.naver?code={ticker}"
         headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36',
-            'Referer': 'https://finance.naver.com/'
         }
         
         response = requests.get(url, headers=headers, timeout=3)
         html = response.content.decode('euc-kr', 'replace')
-        soup = BeautifulSoup(html, 'html.parser')
         
-        tables = soup.find_all("table", class_="type2")
-        target_table = None
+        # pandas로 테이블들을 다 읽어옵니다.
+        dfs = pd.read_html(StringIO(html))
         
-        for table in tables:
-            if "기관" in table.text and "외국인" in table.text and len(table.find_all("tr")) > 10:
-                target_table = table
+        # =========================================================
+        # 1. [잠정치] 찾기 (장중 09:30~14:30)
+        # =========================================================
+        provisional_df = None
+        for df in dfs:
+            # 헤더(컬럼명)를 문자열로 합쳐서 검사
+            headers = "".join([str(c) for c in df.columns])
+            if "잠정" in headers and "외국인" in headers and "기관" in headers:
+                provisional_df = df
                 break
         
-        if target_table:
-            df = pd.read_html(StringIO(str(target_table)))[0]
-            df = df.dropna(how='all')
-            df = df[df.iloc[:, 0].str.match(r'\d{4}\.\d{2}\.\d{2}', na=False)]
+        if provisional_df is not None and not provisional_df.empty:
+            # 유효한 시간 데이터(XX:XX)가 있는 행만 필터링
+            valid_rows = provisional_df[provisional_df.iloc[:, 0].astype(str).str.contains(':', na=False)]
             
-            if not df.empty:
-                latest = df.iloc[0] 
+            if not valid_rows.empty:
+                latest = valid_rows.iloc[-1]
+                time_str = str(latest.iloc[0])
+                
+                # ▼▼▼ [핵심] 컬럼 이름으로 인덱스 찾기 ▼▼▼
+                f_col_idx = -1
+                i_col_idx = -1
+                
+                # 컬럼명 리스트를 순회하며 '외국인', '기관' 위치 찾기
+                for idx, col_name in enumerate(provisional_df.columns):
+                    c_name = str(col_name)
+                    if "외국인" in c_name: f_col_idx = idx
+                    if "기관" in c_name: i_col_idx = idx
+                
+                if f_col_idx != -1 and i_col_idx != -1:
+                    def safe_int(val):
+                        try:
+                            if isinstance(val, str): return int(val.replace(',', ''))
+                            return int(val)
+                        except: return 0
+
+                    f_val = safe_int(latest.iloc[f_col_idx])
+                    i_val = safe_int(latest.iloc[i_col_idx])
+                    p_val = -(f_val + i_val)
+                    
+                    print(f"✅ [잠정치/Smart] {ticker} ({time_str}) -> 외인:{f_val}, 기관:{i_val} (컬럼:{f_col_idx},{i_col_idx})")
+                    
+                    return {
+                        "foreigner": f_val,
+                        "institution": i_val,
+                        "individual": p_val,
+                        "date_str": f"Live({time_str})"
+                    }
+
+        # =========================================================
+        # 2. [확정치] 찾기 (잠정치 실패 시)
+        # =========================================================
+        final_df = None
+        for df in dfs:
+            # 데이터 행이 많고(10개 이상), 날짜/종가/외국인 등이 있는 메인 테이블
+            if len(df) > 10 and "날짜" in str(df.columns) and "외국인" in str(df.columns):
+                final_df = df
+                break
+        
+        if final_df is not None:
+            # 빈 행 제거 및 날짜 필터링
+            final_df = final_df.dropna(how='all')
+            final_df = final_df[final_df.iloc[:, 0].str.match(r'\d{4}\.\d{2}\.\d{2}', na=False)]
+            
+            if not final_df.empty:
+                latest = final_df.iloc[0]
                 date_str = str(latest.iloc[0])
                 
+                # ▼▼▼ 확정치도 이름으로 찾기 ▼▼▼
+                f_col_idx = -1
+                i_col_idx = -1
+                
+                # 네이버 확정치 테이블은 Multi-Index(2단 헤더)일 수 있음 -> 튜플로 처리
+                for idx, col in enumerate(final_df.columns):
+                    # col이 ('외국인', '순매매량') 처럼 튜플일 수도 있고 그냥 문자열일 수도 있음
+                    col_str = str(col)
+                    if "외국인" in col_str and "보유" not in col_str and "소진" not in col_str:
+                        f_col_idx = idx
+                    if "기관" in col_str and "순매매" in col_str: # 기관은 보통 순매매량이 명시됨
+                        i_col_idx = idx
+                
+                # 못 찾았으면 기존 인덱스(Fallback) 사용
+                if f_col_idx == -1: f_col_idx = 6
+                if i_col_idx == -1: i_col_idx = 5
+
                 def safe_int(val):
                     try:
                         if isinstance(val, str): return int(val.replace(',', ''))
                         return int(val)
                     except: return 0
 
-                i_val = safe_int(latest.iloc[5]) # 기관
-                f_val = safe_int(latest.iloc[6]) # 외국인
+                f_val = safe_int(latest.iloc[f_col_idx])
+                i_val = safe_int(latest.iloc[i_col_idx])
+                p_val = -(f_val + i_val)
                 
-                # ▼▼▼ [추가] 개인 수급 역산 (개인 ≈ -(기관 + 외국인)) ▼▼▼
-                p_val = -(i_val + f_val)
-                # ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
-                
-                print(f"✅ [HTML Parse] {ticker} ({date_str}) -> 외인:{f_val}, 기관:{i_val}, 개인(추정):{p_val}")
+                print(f"✅ [확정치/Smart] {ticker} ({date_str}) -> 외인:{f_val}, 기관:{i_val}")
                 
                 return {
                     "foreigner": f_val,
                     "institution": i_val,
-                    "individual": p_val, # 이제 계산된 값이 나갑니다!
+                    "individual": p_val,
                     "date_str": f"Close({date_str[5:]})"
                 }
-                
+
     except Exception as e:
-        print(f"⚠️ [Parse Fail] HTML 파싱 실패: {e}")
+        print(f"⚠️ [Smart Parse Fail] 오류: {e}")
     return None
 
 # =========================================================

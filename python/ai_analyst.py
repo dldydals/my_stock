@@ -55,7 +55,7 @@ Your goal is to provide a JSON daily strategy report.
         # 3. 모델 초기화 (Gemini 1.5 Flash 사용)
         try:
             self.model = genai.GenerativeModel(
-                'gemini-1.5-flash',
+                'gemini-2.0-flash',
                 system_instruction=system_instruction
             )
             print("🤖 [AI Init] Gemini 1.5 Flash 모델 로드 완료 (System Instruction 적용됨)")
